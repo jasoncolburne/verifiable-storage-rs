@@ -1,0 +1,33 @@
+[package]
+name = "verifiable-storage-postgres"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jason Colburne"]
+license = "MIT"
+description = "PostgreSQL implementation for verifiable-storage"
+
+[dependencies]
+# Core traits
+verifiable-storage = { path = "../verifiable-storage" }
+
+# Derive macro
+verifiable-storage-postgres-derive = { path = "../verifiable-storage-postgres-derive" }
+
+# PostgreSQL
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "chrono"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# Async
+async-trait = "0.1"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unwrap_in_result = "deny"

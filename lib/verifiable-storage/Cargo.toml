@@ -1,0 +1,43 @@
+[package]
+name = "verifiable-storage"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jason Colburne"]
+license = "MIT"
+description = "Core traits for content-addressable, verifiable storage using SAIDs"
+
+[features]
+default = []
+surrealdb = ["dep:surrealdb"]
+
+[dependencies]
+# Derive macros
+verifiable-storage-derive = { path = "../verifiable-storage-derive" }
+
+# CESR for cryptographic primitives
+cesr = { git = "https://github.com/jasoncolburne/cesr-rs", default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# SAID computation
+blake3 = "1.5"
+
+# Time with microsecond precision
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "1"
+
+# Async traits
+async-trait = "0.1"
+
+# SurrealDB for native datetime support (optional)
+surrealdb = { version = "2.4.0", default-features = false, features = ["protocol-ws"], optional = true }
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unwrap_in_result = "deny"

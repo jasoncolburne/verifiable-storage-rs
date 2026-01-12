@@ -1,0 +1,33 @@
+[package]
+name = "verifiable-storage-surreal"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jason Colburne"]
+license = "MIT"
+description = "SurrealDB implementation for verifiable-storage"
+
+[dependencies]
+# Core traits (enable surrealdb feature for native datetime support)
+verifiable-storage = { path = "../verifiable-storage", features = ["surrealdb"] }
+
+# Derive macro
+verifiable-storage-surreal-derive = { path = "../verifiable-storage-surreal-derive" }
+
+# SurrealDB
+surrealdb = { version = "2.4.0", default-features = false, features = ["protocol-ws"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# Async
+async-trait = "0.1"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+unwrap_in_result = "deny"

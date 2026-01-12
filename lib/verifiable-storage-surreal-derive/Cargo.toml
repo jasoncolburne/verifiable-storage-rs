@@ -1,0 +1,15 @@
+[package]
+name = "verifiable-storage-surreal-derive"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Jason Colburne"]
+description = "SurrealDB derive macros for verifiable-storage"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "2.0"
+quote = "1.0"
+proc-macro2 = "1.0"
