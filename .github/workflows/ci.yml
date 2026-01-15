@@ -9,9 +9,13 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   fmt:
-    name: Format Check
+    name: Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +23,26 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all --check
+
+  deny:
+    name: Deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@cargo-deny
+      - name: Run cargo deny on all crates
+        run: |
+          for dir in \
+            lib/verifiable-storage \
+            lib/verifiable-storage-derive \
+            lib/verifiable-storage-postgres \
+            lib/verifiable-storage-postgres-derive \
+            lib/verifiable-storage-surreal \
+            lib/verifiable-storage-surreal-derive
+          do
+            echo "Checking $dir..."
+            (cd "$dir" && cargo deny check -A no-license-field) || exit 1
+          done
 
   clippy:
     name: Clippy
@@ -30,28 +54,6 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
-
-  deny:
-    name: Cargo Deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-deny
-        run: cargo install cargo-deny
-      - name: Check lib/verifiable-storage
-        run: cd lib/verifiable-storage && cargo deny check -A no-license-field
-      - name: Check lib/verifiable-storage-derive
-        run: cd lib/verifiable-storage-derive && cargo deny check -A no-license-field
-      - name: Check lib/verifiable-storage-postgres
-        run: cd lib/verifiable-storage-postgres && cargo deny check -A no-license-field
-      - name: Check lib/verifiable-storage-postgres-derive
-        run: cd lib/verifiable-storage-postgres-derive && cargo deny check -A no-license-field
-      - name: Check lib/verifiable-storage-surreal
-        run: cd lib/verifiable-storage-surreal && cargo deny check -A no-license-field
-      - name: Check lib/verifiable-storage-surreal-derive
-        run: cd lib/verifiable-storage-surreal-derive && cargo deny check -A no-license-field
 
   test:
     name: Test
