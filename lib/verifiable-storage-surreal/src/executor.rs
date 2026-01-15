@@ -125,6 +125,7 @@ fn bind_value<'a, C: surrealdb::Connection>(
         verifiable_storage::Value::Float(n) => q.bind((param.to_owned(), *n)),
         verifiable_storage::Value::Bool(b) => q.bind((param.to_owned(), *b)),
         verifiable_storage::Value::Strings(v) => q.bind((param.to_owned(), v.clone())),
+        verifiable_storage::Value::Datetime(dt) => q.bind((param.to_owned(), dt.inner().clone())),
         verifiable_storage::Value::Null => q.bind((param.to_owned(), Option::<String>::None)),
     }
 }
@@ -303,6 +304,100 @@ pub struct SurrealTransaction {
 
 #[async_trait]
 impl TransactionExecutor for SurrealTransaction {
+    async fn fetch<T: Storable + DeserializeOwned + Send>(
+        &mut self,
+        query: Query<T>,
+    ) -> Result<Vec<T>, StorageError> {
+        // Execute immediately (no actual transaction)
+        let join_clause = build_join_clause(&query.table, &query.joins);
+        let where_clause = build_where_clause(&query.filters);
+        let order_clause = build_order_clause(&query.order_by);
+
+        let group_clause = if query.distinct_on.is_empty() {
+            String::new()
+        } else {
+            format!(" GROUP BY {}", query.distinct_on.join(", "))
+        };
+
+        let select_cols = if query.joins.is_empty() {
+            "*".to_string()
+        } else {
+            format!("{}.*", query.table)
+        };
+
+        let mut sql = format!(
+            "SELECT {} FROM {}{}{}{}{}",
+            select_cols, query.table, join_clause, where_clause, group_clause, order_clause
+        );
+
+        if let Some(limit) = query.limit {
+            sql.push_str(&format!(" LIMIT {}", limit));
+        }
+        if let Some(offset) = query.offset {
+            sql.push_str(&format!(" START {}", offset));
+        }
+
+        let mut q = self.db.query(&sql);
+
+        for (i, filter) in query.filters.iter().enumerate() {
+            let param = format!("p{}", i);
+            q = match filter {
+                Filter::Eq(_, v)
+                | Filter::Ne(_, v)
+                | Filter::Gt(_, v)
+                | Filter::Gte(_, v)
+                | Filter::Lt(_, v)
+                | Filter::Lte(_, v)
+                | Filter::In(_, v) => bind_value(q, &param, v),
+                Filter::IsNull(_) | Filter::IsNotNull(_) => q,
+            };
+        }
+
+        let result: Vec<T> = q
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?
+            .take(0)
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    async fn delete<T: Storable + Send>(&mut self, delete: Delete<T>) -> Result<u64, StorageError> {
+        // Execute immediately (no actual transaction)
+        let where_clause = build_where_clause(&delete.filters);
+        let sql = format!("DELETE FROM {}{}", delete.table, where_clause);
+
+        let mut q = self.db.query(&sql);
+
+        for (i, filter) in delete.filters.iter().enumerate() {
+            let param = format!("p{}", i);
+            q = match filter {
+                Filter::Eq(_, v)
+                | Filter::Ne(_, v)
+                | Filter::Gt(_, v)
+                | Filter::Gte(_, v)
+                | Filter::Lt(_, v)
+                | Filter::Lte(_, v)
+                | Filter::In(_, v) => bind_value(q, &param, v),
+                Filter::IsNull(_) | Filter::IsNotNull(_) => q,
+            };
+        }
+
+        q.await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        // SurrealDB doesn't return affected row count easily, return 0
+        Ok(0)
+    }
+
+    async fn acquire_advisory_lock(&mut self, _key: &str) -> Result<(), StorageError> {
+        // SurrealDB doesn't support advisory locks
+        // Return an error as this feature is not available
+        Err(StorageError::StorageError(
+            "Advisory locks are not supported in SurrealDB".to_string(),
+        ))
+    }
+
     async fn insert<T: Storable + Serialize + Send + Sync>(
         &mut self,
         item: &T,

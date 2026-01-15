@@ -3,7 +3,7 @@
 //! This module provides a query abstraction that can be translated to
 //! different database backends (PostgreSQL, SurrealDB, etc.).
 
-use crate::{Storable, StorageError};
+use crate::{Storable, StorageDatetime, StorageError};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
@@ -17,6 +17,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     Strings(Vec<String>),
+    Datetime(StorageDatetime),
     Null,
 }
 
@@ -83,6 +84,18 @@ impl<'a> From<Vec<&'a str>> for Value {
 impl<'a> From<&[&'a str]> for Value {
     fn from(v: &[&'a str]) -> Self {
         Value::Strings(v.iter().map(|s| s.to_string()).collect())
+    }
+}
+
+impl From<StorageDatetime> for Value {
+    fn from(dt: StorageDatetime) -> Self {
+        Value::Datetime(dt)
+    }
+}
+
+impl From<&StorageDatetime> for Value {
+    fn from(dt: &StorageDatetime) -> Self {
+        Value::Datetime(dt.clone())
     }
 }
 
@@ -355,11 +368,25 @@ pub trait QueryExecutor: Send + Sync {
 /// Trait for executing queries within a transaction.
 #[async_trait]
 pub trait TransactionExecutor: Send + Sync {
+    /// Execute a SELECT query within the transaction.
+    async fn fetch<T: Storable + DeserializeOwned + Send>(
+        &mut self,
+        query: Query<T>,
+    ) -> Result<Vec<T>, StorageError>;
+
+    /// Execute a DELETE query within the transaction.
+    async fn delete<T: Storable + Send>(&mut self, delete: Delete<T>) -> Result<u64, StorageError>;
+
     /// Insert an item within the transaction.
     async fn insert<T: Storable + serde::Serialize + Send + Sync>(
         &mut self,
         item: &T,
     ) -> Result<u64, StorageError>;
+
+    /// Acquire an advisory lock scoped to this transaction.
+    /// The lock is automatically released on commit/rollback.
+    /// Used to serialize operations on a logical key (e.g., a prefix).
+    async fn acquire_advisory_lock(&mut self, key: &str) -> Result<(), StorageError>;
 
     /// Commit the transaction.
     async fn commit(self) -> Result<(), StorageError>;
