@@ -153,6 +153,15 @@ fn bind_value(args: &mut PgArguments, value: &Value) -> Result<(), StorageError>
             args.add(v.as_slice())
                 .map_err(|e| StorageError::StorageError(e.to_string()))?;
         }
+        Value::Datetime(dt) => {
+            // Convert via string to avoid depending on StorageDatetime's internal structure
+            let s = dt.to_string();
+            let chrono_dt = chrono::DateTime::parse_from_rfc3339(&s)
+                .map_err(|e| StorageError::StorageError(format!("Invalid datetime: {}", e)))?
+                .with_timezone(&chrono::Utc);
+            args.add(chrono_dt)
+                .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        }
         Value::Null => {
             args.add(None::<String>)
                 .map_err(|e| StorageError::StorageError(e.to_string()))?;
@@ -317,11 +326,78 @@ pub struct PgTransaction {
 
 #[async_trait]
 impl TransactionExecutor for PgTransaction {
+    async fn fetch<T: Storable + DeserializeOwned + Send>(
+        &mut self,
+        query: Query<T>,
+    ) -> Result<Vec<T>, StorageError> {
+        let join_clause = build_join_clause(&query.table, &query.joins);
+        let (where_clause, _) = build_where_clause(&query.filters, 1);
+        let order_clause = build_order_clause(&query.order_by);
+
+        let distinct_clause = if query.distinct_on.is_empty() {
+            String::new()
+        } else {
+            format!("DISTINCT ON ({}) ", query.distinct_on.join(", "))
+        };
+
+        let select_cols = if query.joins.is_empty() {
+            "*".to_string()
+        } else {
+            format!("{}.*", query.table)
+        };
+
+        let mut sql = format!(
+            "SELECT {}{} FROM {}{}{}{}",
+            distinct_clause, select_cols, query.table, join_clause, where_clause, order_clause
+        );
+
+        if let Some(limit) = query.limit {
+            sql.push_str(&format!(" LIMIT {}", limit));
+        }
+        if let Some(offset) = query.offset {
+            sql.push_str(&format!(" OFFSET {}", offset));
+        }
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let rows = sqlx::query_with(&sql, args)
+            .fetch_all(&mut *self.tx)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        rows.iter().map(|row| deserialize_row::<T>(row)).collect()
+    }
+
+    async fn delete<T: Storable + Send>(&mut self, delete: Delete<T>) -> Result<u64, StorageError> {
+        let (where_clause, _) = build_where_clause(&delete.filters, 1);
+        let sql = format!("DELETE FROM {}{}", delete.table, where_clause);
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &delete.filters)?;
+
+        let result = sqlx::query_with(&sql, args)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        Ok(result.rows_affected())
+    }
+
     async fn insert<T: Storable + Serialize + Send + Sync>(
         &mut self,
         item: &T,
     ) -> Result<u64, StorageError> {
         bind_insert_values_tx(&mut self.tx, item).await
+    }
+
+    async fn acquire_advisory_lock(&mut self, key: &str) -> Result<(), StorageError> {
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtext($1))")
+            .bind(key)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        Ok(())
     }
 
     async fn commit(self) -> Result<(), StorageError> {
