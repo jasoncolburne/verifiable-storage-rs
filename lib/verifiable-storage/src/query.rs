@@ -321,6 +321,11 @@ impl<T: Storable> Delete<T> {
     pub fn gte(self, field: impl Into<String>, value: impl Into<Value>) -> Self {
         self.filter(Filter::Gte(field.into(), value.into()))
     }
+
+    /// Add an IN filter.
+    pub fn r#in(self, field: impl Into<String>, values: impl Into<Value>) -> Self {
+        self.filter(Filter::In(field.into(), values.into()))
+    }
 }
 
 impl<T: Storable> Default for Delete<T> {
