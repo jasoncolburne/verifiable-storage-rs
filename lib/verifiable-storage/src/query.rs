@@ -468,3 +468,79 @@ pub trait TransactionExecutor: Send + Sync {
     /// Rollback the transaction.
     async fn rollback(self) -> Result<(), StorageError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_query_new() {
+        let query = ColumnQuery::new("my_table", "my_column");
+        assert_eq!(query.table, "my_table");
+        assert_eq!(query.column, "my_column");
+        assert!(!query.distinct);
+        assert!(query.filters.is_empty());
+        assert!(query.order.is_none());
+        assert!(query.limit.is_none());
+    }
+
+    #[test]
+    fn column_query_distinct() {
+        let query = ColumnQuery::new("t", "c").distinct();
+        assert!(query.distinct);
+    }
+
+    #[test]
+    fn column_query_gt_filter() {
+        let query = ColumnQuery::new("t", "prefix").gt("abc");
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(
+            &query.filters[0],
+            Filter::Gt(field, Value::String(val)) if field == "prefix" && val == "abc"
+        ));
+    }
+
+    #[test]
+    fn column_query_order() {
+        let query = ColumnQuery::new("t", "c").order(Order::Asc);
+        assert!(matches!(query.order, Some(Order::Asc)));
+
+        let query = ColumnQuery::new("t", "c").order(Order::Desc);
+        assert!(matches!(query.order, Some(Order::Desc)));
+    }
+
+    #[test]
+    fn column_query_limit() {
+        let query = ColumnQuery::new("t", "c").limit(100);
+        assert_eq!(query.limit, Some(100));
+    }
+
+    #[test]
+    fn column_query_chained() {
+        let query = ColumnQuery::new("events", "prefix")
+            .distinct()
+            .gt("Eabc")
+            .order(Order::Asc)
+            .limit(50);
+
+        assert_eq!(query.table, "events");
+        assert_eq!(query.column, "prefix");
+        assert!(query.distinct);
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(query.order, Some(Order::Asc)));
+        assert_eq!(query.limit, Some(50));
+    }
+
+    #[test]
+    fn column_query_filter() {
+        let query = ColumnQuery::new("t", "c").filter(Filter::Eq(
+            "status".to_string(),
+            Value::String("active".to_string()),
+        ));
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(
+            &query.filters[0],
+            Filter::Eq(field, Value::String(val)) if field == "status" && val == "active"
+        ));
+    }
+}
