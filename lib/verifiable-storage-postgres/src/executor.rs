@@ -9,8 +9,8 @@ use sqlx::postgres::{PgArguments, PgPoolOptions};
 use sqlx::{Arguments, Postgres, Transaction};
 use std::ops::Deref;
 use verifiable_storage::{
-    Delete, Filter, Join, Order, Query, QueryExecutor, Storable, StorageError, TransactionExecutor,
-    Value,
+    ColumnQuery, Delete, Filter, Join, Order, Query, QueryExecutor, Storable, StorageError,
+    TransactionExecutor, Value,
 };
 
 use crate::{bind_insert_values, bind_insert_values_tx, deserialize_row};
@@ -316,6 +316,38 @@ impl QueryExecutor for PgPool {
             .await
             .map_err(|e| StorageError::StorageError(e.to_string()))?;
         Ok(PgTransaction { tx })
+    }
+
+    async fn fetch_column(&self, query: ColumnQuery) -> Result<Vec<String>, StorageError> {
+        use sqlx::Row;
+
+        let distinct = if query.distinct { "DISTINCT " } else { "" };
+        let (where_clause, _) = build_where_clause(&query.filters, 1);
+        let order_clause = match query.order {
+            Some(Order::Asc) => format!(" ORDER BY {} ASC", query.column),
+            Some(Order::Desc) => format!(" ORDER BY {} DESC", query.column),
+            None => String::new(),
+        };
+        let limit_clause = query
+            .limit
+            .map(|l| format!(" LIMIT {}", l))
+            .unwrap_or_default();
+
+        let sql = format!(
+            "SELECT {}{} FROM {}{}{}{}",
+            distinct, query.column, query.table, where_clause, order_clause, limit_clause
+        );
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let rows = sqlx::query_with(&sql, args)
+            .fetch_all(&self.0)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        let values: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
+        Ok(values)
     }
 }
 

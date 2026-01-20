@@ -277,6 +277,70 @@ impl<T: Storable> Default for Query<T> {
     }
 }
 
+/// A query builder for fetching values from a single column.
+///
+/// Unlike `Query<T>` which returns deserialized objects, `ColumnQuery` returns
+/// raw column values as strings. Useful for listing unique identifiers.
+#[derive(Debug, Clone)]
+pub struct ColumnQuery {
+    /// The table to query.
+    pub table: String,
+    /// The column to select.
+    pub column: String,
+    /// Whether to return only distinct values.
+    pub distinct: bool,
+    /// Filter conditions.
+    pub filters: Vec<Filter>,
+    /// Sort order for the column.
+    pub order: Option<Order>,
+    /// Maximum number of results.
+    pub limit: Option<u64>,
+}
+
+impl ColumnQuery {
+    /// Create a new column query.
+    pub fn new(table: impl Into<String>, column: impl Into<String>) -> Self {
+        Self {
+            table: table.into(),
+            column: column.into(),
+            distinct: false,
+            filters: Vec::new(),
+            order: None,
+            limit: None,
+        }
+    }
+
+    /// Return only distinct values.
+    pub fn distinct(mut self) -> Self {
+        self.distinct = true;
+        self
+    }
+
+    /// Add a filter condition.
+    pub fn filter(mut self, filter: Filter) -> Self {
+        self.filters.push(filter);
+        self
+    }
+
+    /// Add a greater-than filter on the column (for cursor-based pagination).
+    pub fn gt(self, value: impl Into<Value>) -> Self {
+        let column = self.column.clone();
+        self.filter(Filter::Gt(column, value.into()))
+    }
+
+    /// Set sort order.
+    pub fn order(mut self, order: Order) -> Self {
+        self.order = Some(order);
+        self
+    }
+
+    /// Set the maximum number of results.
+    pub fn limit(mut self, limit: u64) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+}
+
 /// A DELETE query builder.
 #[derive(Debug, Clone)]
 pub struct Delete<T> {
@@ -368,6 +432,11 @@ pub trait QueryExecutor: Send + Sync {
 
     /// Begin a transaction. The returned executor can be used for queries within the transaction.
     async fn begin_transaction(&self) -> Result<Self::Transaction, StorageError>;
+
+    /// Fetch column values as strings using a ColumnQuery.
+    ///
+    /// Unlike `fetch` which returns deserialized objects, this returns raw column values.
+    async fn fetch_column(&self, query: ColumnQuery) -> Result<Vec<String>, StorageError>;
 }
 
 /// Trait for executing queries within a transaction.
@@ -398,4 +467,80 @@ pub trait TransactionExecutor: Send + Sync {
 
     /// Rollback the transaction.
     async fn rollback(self) -> Result<(), StorageError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn column_query_new() {
+        let query = ColumnQuery::new("my_table", "my_column");
+        assert_eq!(query.table, "my_table");
+        assert_eq!(query.column, "my_column");
+        assert!(!query.distinct);
+        assert!(query.filters.is_empty());
+        assert!(query.order.is_none());
+        assert!(query.limit.is_none());
+    }
+
+    #[test]
+    fn column_query_distinct() {
+        let query = ColumnQuery::new("t", "c").distinct();
+        assert!(query.distinct);
+    }
+
+    #[test]
+    fn column_query_gt_filter() {
+        let query = ColumnQuery::new("t", "prefix").gt("abc");
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(
+            &query.filters[0],
+            Filter::Gt(field, Value::String(val)) if field == "prefix" && val == "abc"
+        ));
+    }
+
+    #[test]
+    fn column_query_order() {
+        let query = ColumnQuery::new("t", "c").order(Order::Asc);
+        assert!(matches!(query.order, Some(Order::Asc)));
+
+        let query = ColumnQuery::new("t", "c").order(Order::Desc);
+        assert!(matches!(query.order, Some(Order::Desc)));
+    }
+
+    #[test]
+    fn column_query_limit() {
+        let query = ColumnQuery::new("t", "c").limit(100);
+        assert_eq!(query.limit, Some(100));
+    }
+
+    #[test]
+    fn column_query_chained() {
+        let query = ColumnQuery::new("events", "prefix")
+            .distinct()
+            .gt("Eabc")
+            .order(Order::Asc)
+            .limit(50);
+
+        assert_eq!(query.table, "events");
+        assert_eq!(query.column, "prefix");
+        assert!(query.distinct);
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(query.order, Some(Order::Asc)));
+        assert_eq!(query.limit, Some(50));
+    }
+
+    #[test]
+    fn column_query_filter() {
+        let query = ColumnQuery::new("t", "c").filter(Filter::Eq(
+            "status".to_string(),
+            Value::String("active".to_string()),
+        ));
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(
+            &query.filters[0],
+            Filter::Eq(field, Value::String(val)) if field == "status" && val == "active"
+        ));
+    }
 }

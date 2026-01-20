@@ -30,7 +30,9 @@ mod storable;
 mod time;
 
 pub use error::StorageError;
-pub use query::{Delete, Filter, Join, Order, Query, QueryExecutor, TransactionExecutor, Value};
+pub use query::{
+    ColumnQuery, Delete, Filter, Join, Order, Query, QueryExecutor, TransactionExecutor, Value,
+};
 pub use repository::{
     ConnectionConfig, RepositoryConnection, UnversionedRepository, VersionedRepository,
 };
