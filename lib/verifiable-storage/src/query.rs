@@ -277,6 +277,70 @@ impl<T: Storable> Default for Query<T> {
     }
 }
 
+/// A query builder for fetching values from a single column.
+///
+/// Unlike `Query<T>` which returns deserialized objects, `ColumnQuery` returns
+/// raw column values as strings. Useful for listing unique identifiers.
+#[derive(Debug, Clone)]
+pub struct ColumnQuery {
+    /// The table to query.
+    pub table: String,
+    /// The column to select.
+    pub column: String,
+    /// Whether to return only distinct values.
+    pub distinct: bool,
+    /// Filter conditions.
+    pub filters: Vec<Filter>,
+    /// Sort order for the column.
+    pub order: Option<Order>,
+    /// Maximum number of results.
+    pub limit: Option<u64>,
+}
+
+impl ColumnQuery {
+    /// Create a new column query.
+    pub fn new(table: impl Into<String>, column: impl Into<String>) -> Self {
+        Self {
+            table: table.into(),
+            column: column.into(),
+            distinct: false,
+            filters: Vec::new(),
+            order: None,
+            limit: None,
+        }
+    }
+
+    /// Return only distinct values.
+    pub fn distinct(mut self) -> Self {
+        self.distinct = true;
+        self
+    }
+
+    /// Add a filter condition.
+    pub fn filter(mut self, filter: Filter) -> Self {
+        self.filters.push(filter);
+        self
+    }
+
+    /// Add a greater-than filter on the column (for cursor-based pagination).
+    pub fn gt(self, value: impl Into<Value>) -> Self {
+        let column = self.column.clone();
+        self.filter(Filter::Gt(column, value.into()))
+    }
+
+    /// Set sort order.
+    pub fn order(mut self, order: Order) -> Self {
+        self.order = Some(order);
+        self
+    }
+
+    /// Set the maximum number of results.
+    pub fn limit(mut self, limit: u64) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+}
+
 /// A DELETE query builder.
 #[derive(Debug, Clone)]
 pub struct Delete<T> {
@@ -368,6 +432,11 @@ pub trait QueryExecutor: Send + Sync {
 
     /// Begin a transaction. The returned executor can be used for queries within the transaction.
     async fn begin_transaction(&self) -> Result<Self::Transaction, StorageError>;
+
+    /// Fetch column values as strings using a ColumnQuery.
+    ///
+    /// Unlike `fetch` which returns deserialized objects, this returns raw column values.
+    async fn fetch_column(&self, query: ColumnQuery) -> Result<Vec<String>, StorageError>;
 }
 
 /// Trait for executing queries within a transaction.

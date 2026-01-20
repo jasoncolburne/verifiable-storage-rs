@@ -10,7 +10,8 @@ use std::ops::Deref;
 use surrealdb::Surreal;
 use surrealdb::engine::remote::ws::Client;
 use verifiable_storage::{
-    Delete, Filter, Join, Order, Query, QueryExecutor, Storable, StorageError, TransactionExecutor,
+    ColumnQuery, Delete, Filter, Join, Order, Query, QueryExecutor, Storable, StorageError,
+    TransactionExecutor,
 };
 
 /// Helper struct for deserializing count() results from SurrealDB.
@@ -290,6 +291,58 @@ impl QueryExecutor for SurrealPool {
             db: self.0.clone(),
             committed: false,
         })
+    }
+
+    async fn fetch_column(&self, query: ColumnQuery) -> Result<Vec<String>, StorageError> {
+        let distinct = if query.distinct { "DISTINCT " } else { "" };
+        let where_clause = build_where_clause(&query.filters);
+        let order_clause = match query.order {
+            Some(Order::Asc) => format!(" ORDER BY {} ASC", query.column),
+            Some(Order::Desc) => format!(" ORDER BY {} DESC", query.column),
+            None => String::new(),
+        };
+        let limit_clause = query
+            .limit
+            .map(|l| format!(" LIMIT {}", l))
+            .unwrap_or_default();
+
+        // SurrealDB uses array::distinct() for distinct values
+        let sql = if query.distinct {
+            format!(
+                "SELECT VALUE array::distinct({}) FROM {}{}{}{}",
+                query.column, query.table, where_clause, order_clause, limit_clause
+            )
+        } else {
+            format!(
+                "SELECT {}{} FROM {}{}{}{}",
+                distinct, query.column, query.table, where_clause, order_clause, limit_clause
+            )
+        };
+
+        let mut q = self.0.query(&sql);
+
+        // Bind filter values
+        for (i, filter) in query.filters.iter().enumerate() {
+            let param = format!("p{}", i);
+            q = match filter {
+                Filter::Eq(_, v)
+                | Filter::Ne(_, v)
+                | Filter::Gt(_, v)
+                | Filter::Gte(_, v)
+                | Filter::Lt(_, v)
+                | Filter::Lte(_, v)
+                | Filter::In(_, v) => bind_value(q, &param, v),
+                Filter::IsNull(_) | Filter::IsNotNull(_) => q,
+            };
+        }
+
+        let result: Vec<String> = q
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?
+            .take(0)
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        Ok(result)
     }
 }
 
