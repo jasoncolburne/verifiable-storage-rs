@@ -9,7 +9,7 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 /// ## Individual Repository Mode
 /// Applied to a repository struct with `item_type` and `table`, generates:
 /// - `new(pool: PgPool) -> Self` constructor
-/// - `ChainedRepository<T>` or `UnversionedRepository<T>` implementation
+/// - `ChainedRepository<T>` or `UnchainedRepository<T>` implementation
 ///
 /// The struct must have a `pool: PgPool` field.
 /// The item type must implement `Storable + Serialize + DeserializeOwned`.
@@ -113,7 +113,7 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
         // Combined repository mode - generate RepositoryConnection
         generate_combined_repository(repo_name, &input, migrations.as_deref())
     } else {
-        // Individual repository mode - generate ChainedRepository/UnversionedRepository
+        // Individual repository mode - generate ChainedRepository/UnchainedRepository
         let item_type = item_type.expect("Missing item_type in #[stored(...)]");
         let table_name = table_name.expect("Missing table in #[stored(...)]");
         generate_individual_repository(
@@ -322,7 +322,7 @@ fn generate_individual_repository(
             #new_impl
 
             #[async_trait::async_trait]
-            impl verifiable_storage::UnversionedRepository<#item_type> for #repo_name {
+            impl verifiable_storage::UnchainedRepository<#item_type> for #repo_name {
                 async fn create(
                     &self,
                     mut item: #item_type,
