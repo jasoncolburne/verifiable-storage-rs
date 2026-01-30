@@ -4,10 +4,6 @@ target/
 *.pdb
 Cargo.lock
 
-# Local ADNS configuration (deployment-specific)
-.adns/*
-!.adns/.gitkeep
-
 # Garden
 .garden/
 

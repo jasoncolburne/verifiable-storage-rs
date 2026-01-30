@@ -1,7 +1,6 @@
 //! SurrealDB implementation of QueryExecutor.
 //!
 //! Note: Transactions are not implemented - the methods exist but don't create actual transactions.
-//! This is sufficient for ADNS which doesn't require transactional guarantees.
 
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
