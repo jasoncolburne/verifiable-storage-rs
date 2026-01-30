@@ -1,13 +1,13 @@
 //! Repository traits for content-addressable data following the SAID pattern.
 //!
-//! - `VersionedRepository<T>`: For versioned types with prefix-based lookup
+//! - `ChainedRepository<T>`: For versioned types with prefix-based lookup
 //! - `UnversionedRepository<T>`: For simple types with SAID-only lookup
 //! - `RepositoryConnection`: Database connection and initialization
 
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{SelfAddressed, StorageError, Versioned};
+use crate::{Chained, SelfAddressed, StorageError};
 
 /// Connection configuration for database backends.
 ///
@@ -52,7 +52,7 @@ pub trait RepositoryConnection: Sized + Send + Sync {
     async fn initialize(&self) -> Result<(), StorageError>;
 }
 
-/// Repository trait for types that are SelfAddressed + Versioned.
+/// Repository trait for types that are SelfAddressed + Chained.
 ///
 /// This trait provides standard CRUD operations following the SAID versioning pattern:
 /// - `create`: Creates the first version (calls `derive_prefix()`, then inserts)
@@ -65,13 +65,13 @@ pub trait RepositoryConnection: Sized + Send + Sync {
 ///
 /// The generic type `T` must implement:
 /// - `SelfAddressed`: For computing content-based identifiers
-/// - `Versioned`: For prefix, versioning (previous, version, increment)
+/// - `Chained`: For prefix, versioning (previous, version, increment)
 /// - `Serialize + DeserializeOwned`: For storage
 /// - `Clone + Send + Sync`: For async operations
 #[async_trait]
-pub trait VersionedRepository<T>
+pub trait ChainedRepository<T>
 where
-    T: SelfAddressed + Versioned + Serialize + DeserializeOwned + Clone + Send + Sync,
+    T: SelfAddressed + Chained + Serialize + DeserializeOwned + Clone + Send + Sync,
 {
     /// Create the first version of an item.
     ///
@@ -131,7 +131,7 @@ where
 /// - `Serialize + DeserializeOwned`: For storage
 /// - `Clone + Send + Sync`: For async operations
 #[async_trait]
-pub trait UnversionedRepository<T>
+pub trait UnchainedRepository<T>
 where
     T: SelfAddressed + Serialize + DeserializeOwned + Clone + Send + Sync,
 {
