@@ -309,6 +309,14 @@ impl QueryExecutor for PgPool {
         bind_insert_values(&self.0, item).await
     }
 
+    async fn insert_with_table<T: Storable + Serialize + Send + Sync>(
+        &self,
+        item: &T,
+        table: &str,
+    ) -> Result<u64, StorageError> {
+        crate::bind_insert_with_table(&self.0, item, table).await
+    }
+
     async fn begin_transaction(&self) -> Result<Self::Transaction, StorageError> {
         let tx = self
             .0
@@ -421,6 +429,14 @@ impl TransactionExecutor for PgTransaction {
         item: &T,
     ) -> Result<u64, StorageError> {
         bind_insert_values_tx(&mut self.tx, item).await
+    }
+
+    async fn insert_with_table<T: Storable + Serialize + Send + Sync>(
+        &mut self,
+        item: &T,
+        table: &str,
+    ) -> Result<u64, StorageError> {
+        crate::bind_insert_with_table_tx(&mut self.tx, item, table).await
     }
 
     async fn acquire_advisory_lock(&mut self, key: &str) -> Result<(), StorageError> {

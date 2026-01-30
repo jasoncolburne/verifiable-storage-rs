@@ -36,9 +36,7 @@ jobs:
             lib/verifiable-storage \
             lib/verifiable-storage-derive \
             lib/verifiable-storage-postgres \
-            lib/verifiable-storage-postgres-derive \
-            lib/verifiable-storage-surreal \
-            lib/verifiable-storage-surreal-derive
+            lib/verifiable-storage-postgres-derive
           do
             echo "Checking $dir..."
             (cd "$dir" && cargo deny check -A no-license-field) || exit 1
