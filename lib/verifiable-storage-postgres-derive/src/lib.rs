@@ -299,8 +299,7 @@ fn generate_individual_repository(
                 ) -> Result<Vec<#item_type>, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
-                        .eq(#prefix_field, prefix)
-                        .order_by("version", verifiable_storage_postgres::Order::Asc);
+                        .eq(#prefix_field, prefix);
                     self.pool.fetch(query).await
                 }
 
