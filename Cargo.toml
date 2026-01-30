@@ -6,8 +6,6 @@ members = [
     "lib/verifiable-storage-derive",
     "lib/verifiable-storage-postgres",
     "lib/verifiable-storage-postgres-derive",
-    "lib/verifiable-storage-surreal",
-    "lib/verifiable-storage-surreal-derive",
 ]
 
 # Shared dependencies across workspace for version consistency

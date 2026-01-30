@@ -430,6 +430,13 @@ pub trait QueryExecutor: Send + Sync {
         item: &T,
     ) -> Result<u64, StorageError>;
 
+    /// Insert an item into a specific table.
+    async fn insert_with_table<T: Storable + serde::Serialize + Send + Sync>(
+        &self,
+        item: &T,
+        table: &str,
+    ) -> Result<u64, StorageError>;
+
     /// Begin a transaction. The returned executor can be used for queries within the transaction.
     async fn begin_transaction(&self) -> Result<Self::Transaction, StorageError>;
 
@@ -455,6 +462,13 @@ pub trait TransactionExecutor: Send + Sync {
     async fn insert<T: Storable + serde::Serialize + Send + Sync>(
         &mut self,
         item: &T,
+    ) -> Result<u64, StorageError>;
+
+    /// Insert an item into a specific table within the transaction.
+    async fn insert_with_table<T: Storable + serde::Serialize + Send + Sync>(
+        &mut self,
+        item: &T,
+        table: &str,
     ) -> Result<u64, StorageError>;
 
     /// Acquire an advisory lock scoped to this transaction.
