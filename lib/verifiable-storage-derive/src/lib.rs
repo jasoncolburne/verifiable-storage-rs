@@ -402,39 +402,42 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         let json_key_literals: Vec<_> = json_keys.iter().map(|s| s.as_str()).collect();
 
         // Generate table-dependent methods based on whether table name was provided
-        let (table_name_impl, insert_sql_impl, select_all_impl, select_by_id_impl) =
-            if let Some(ref table_name) = maybe_table_name {
-                let columns_str = column_names.join(", ");
-                let placeholders: Vec<String> = (1..=column_names.len())
-                    .map(|i| format!("${}", i))
-                    .collect();
-                let placeholders_str = placeholders.join(", ");
-                let insert_sql = format!(
-                    "INSERT INTO {} ({}) VALUES ({})",
-                    table_name, columns_str, placeholders_str
-                );
-                let select_all_sql = format!("SELECT * FROM {}", table_name);
-                let select_by_id_sql = format!("SELECT * FROM {} WHERE said = $1", table_name);
+        let (table_name_impl, insert_sql_impl, select_all_impl, select_by_id_impl) = if let Some(
+            ref table_name,
+        ) =
+            maybe_table_name
+        {
+            let columns_str = column_names.join(", ");
+            let placeholders: Vec<String> = (1..=column_names.len())
+                .map(|i| format!("${}", i))
+                .collect();
+            let placeholders_str = placeholders.join(", ");
+            let insert_sql = format!(
+                "INSERT INTO {} ({}) VALUES ({})",
+                table_name, columns_str, placeholders_str
+            );
+            let select_all_sql = format!("SELECT * FROM {}", table_name);
+            let select_by_id_sql = format!("SELECT * FROM {} WHERE said = $1", table_name);
 
-                (
-                    quote! { #table_name },
-                    quote! { #insert_sql },
-                    quote! { #select_all_sql },
-                    quote! { #select_by_id_sql },
-                )
-            } else {
-                let type_name = name.to_string();
-                let panic_msg = format!(
-                    "table_name() called on {} but no table was specified in #[storable]. Use #[storable(table = \"...\")] or pass table name explicitly.",
-                    type_name
-                );
-                (
-                    quote! { panic!(#panic_msg) },
-                    quote! { panic!(#panic_msg) },
-                    quote! { panic!(#panic_msg) },
-                    quote! { panic!(#panic_msg) },
-                )
-            };
+            (
+                quote! { #table_name },
+                quote! { #insert_sql },
+                quote! { #select_all_sql },
+                quote! { #select_by_id_sql },
+            )
+        } else {
+            let type_name = name.to_string();
+            let panic_msg = format!(
+                "table_name() called on {} but no table was specified in #[storable]. Use #[storable(table = \"...\")] or pass table name explicitly.",
+                type_name
+            );
+            (
+                quote! { panic!(#panic_msg) },
+                quote! { panic!(#panic_msg) },
+                quote! { panic!(#panic_msg) },
+                quote! { panic!(#panic_msg) },
+            )
+        };
 
         quote! {
             impl verifiable_storage::Storable for #name {
