@@ -70,6 +70,6 @@ pub trait Storable: serde::Serialize + serde::de::DeserializeOwned + Clone + Sen
     /// Get the primary key value (the SAID).
     fn id(&self) -> &str;
 
-    /// Check if this type is versioned.
-    fn is_versioned() -> bool;
+    /// Check if this type is chained (has prefix + previous).
+    fn is_chained() -> bool;
 }
