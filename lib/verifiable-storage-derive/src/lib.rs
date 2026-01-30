@@ -98,8 +98,10 @@ fn rust_type_to_sql_type(ty: &syn::Type) -> &'static str {
     }
 }
 
-/// Parse #[storable(table = "...")] attribute and return table name
-fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
+/// Parse #[storable] or #[storable(table = "...")] attribute.
+/// Returns None if no #[storable] attribute, Some(None) if #[storable] without table,
+/// Some(Some(table)) if #[storable(table = "...")].
+fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
     for attr in &input.attrs {
         if attr.path().is_ident("storable") {
             let mut table_name = None;
@@ -113,7 +115,7 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
                 }
                 Ok(())
             });
-            return table_name;
+            return Some(table_name);
         }
     }
     None
@@ -371,8 +373,8 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         quote! {}
     };
 
-    // Generate Storable impl if #[storable(table = "...")] is present
-    let storable_impl = if let Some(table_name) = parse_storable_attr(&input) {
+    // Generate Storable impl if #[storable] or #[storable(table = "...")] is present
+    let storable_impl = if let Some(maybe_table_name) = parse_storable_attr(&input) {
         // Collect column names, types, and JSON keys for all non-skipped fields
         let mut column_names: Vec<String> = Vec::new();
         let mut column_types: Vec<&'static str> = Vec::new();
@@ -393,31 +395,54 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
             json_keys.push(json_key);
         }
 
-        // Generate INSERT SQL: INSERT INTO table (col1, col2, ...) VALUES ($1, $2, ...)
-        let columns_str = column_names.join(", ");
-        let placeholders: Vec<String> = (1..=column_names.len())
-            .map(|i| format!("${}", i))
-            .collect();
-        let placeholders_str = placeholders.join(", ");
-        let insert_sql = format!(
-            "INSERT INTO {} ({}) VALUES ({})",
-            table_name, columns_str, placeholders_str
-        );
-
-        // Generate SELECT SQLs
-        let select_all_sql = format!("SELECT * FROM {}", table_name);
-        let select_by_id_sql = format!("SELECT * FROM {} WHERE said = $1", table_name);
-
         // Column names as static array
         let column_count = column_names.len();
         let column_literals: Vec<_> = column_names.iter().map(|s| s.as_str()).collect();
         let column_type_literals: Vec<_> = column_types.to_vec();
         let json_key_literals: Vec<_> = json_keys.iter().map(|s| s.as_str()).collect();
 
+        // Generate table-dependent methods based on whether table name was provided
+        let (table_name_impl, insert_sql_impl, select_all_impl, select_by_id_impl) = if let Some(
+            ref table_name,
+        ) =
+            maybe_table_name
+        {
+            let columns_str = column_names.join(", ");
+            let placeholders: Vec<String> = (1..=column_names.len())
+                .map(|i| format!("${}", i))
+                .collect();
+            let placeholders_str = placeholders.join(", ");
+            let insert_sql = format!(
+                "INSERT INTO {} ({}) VALUES ({})",
+                table_name, columns_str, placeholders_str
+            );
+            let select_all_sql = format!("SELECT * FROM {}", table_name);
+            let select_by_id_sql = format!("SELECT * FROM {} WHERE said = $1", table_name);
+
+            (
+                quote! { #table_name },
+                quote! { #insert_sql },
+                quote! { #select_all_sql },
+                quote! { #select_by_id_sql },
+            )
+        } else {
+            let type_name = name.to_string();
+            let panic_msg = format!(
+                "table_name() called on {} but no table was specified in #[storable]. Use #[storable(table = \"...\")] or pass table name explicitly.",
+                type_name
+            );
+            (
+                quote! { panic!(#panic_msg) },
+                quote! { panic!(#panic_msg) },
+                quote! { panic!(#panic_msg) },
+                quote! { panic!(#panic_msg) },
+            )
+        };
+
         quote! {
             impl verifiable_storage::Storable for #name {
                 fn table_name() -> &'static str {
-                    #table_name
+                    #table_name_impl
                 }
 
                 fn columns() -> &'static [&'static str] {
@@ -433,15 +458,15 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                 }
 
                 fn insert_sql() -> &'static str {
-                    #insert_sql
+                    #insert_sql_impl
                 }
 
                 fn select_all_sql() -> &'static str {
-                    #select_all_sql
+                    #select_all_impl
                 }
 
                 fn select_by_id_sql() -> &'static str {
-                    #select_by_id_sql
+                    #select_by_id_impl
                 }
 
                 fn column_count() -> usize {
