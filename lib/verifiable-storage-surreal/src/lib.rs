@@ -11,7 +11,7 @@
 //! # Example
 //!
 //! ```text
-//! use verifiable_storage::{SelfAddressed, Versioned};
+//! use verifiable_storage::{SelfAddressed, Chained};
 //! use verifiable_storage_surreal::Stored;
 //!
 //! #[derive(Stored)]
@@ -37,7 +37,7 @@ pub use verifiable_storage_surreal_derive::Stored;
 
 // Re-export core types for convenience
 pub use verifiable_storage::{
-    ConnectionConfig, Delete, Filter, Order, Query, QueryExecutor, RepositoryConnection,
-    SelfAddressed, Storable, StorageDatetime, StorageError, TransactionExecutor,
-    UnversionedRepository, Value, Versioned, VersionedRepository, compute_said,
+    Chained, ChainedRepository, ConnectionConfig, Delete, Filter, Order, Query, QueryExecutor,
+    RepositoryConnection, SelfAddressed, Storable, StorageDatetime, StorageError,
+    TransactionExecutor, UnchainedRepository, Value, compute_said,
 };

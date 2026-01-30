@@ -5,7 +5,7 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 /// Derive macro for Stored - generates SurrealDB repository implementation.
 ///
 /// Applied to a repository struct, generates either:
-/// - `impl VersionedRepository<T>` when `versioned = true` (default)
+/// - `impl ChainedRepository<T>` when `versioned = true` (default)
 /// - `impl UnversionedRepository<T>` when `versioned = false`
 ///
 /// Also generates a `new()` constructor that connects to SurrealDB.
@@ -18,7 +18,7 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 /// - `namespace`: The SurrealDB namespace (required)
 /// - `id_field`: The field name containing the SAID (default: "said")
 /// - `prefix_field`: The field name containing the prefix (default: "prefix", only used when versioned)
-/// - `versioned`: Whether to generate VersionedRepository (default: true)
+/// - `versioned`: Whether to generate ChainedRepository (default: true)
 /// - `signatures`: Whether to generate signature storage methods (default: false, only for versioned)
 ///
 /// Example (versioned):
@@ -234,9 +234,9 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
                     &self,
                     prefix: &str,
                 ) -> Result<Vec<adns::SignedKeyEvent>, verifiable_storage::StorageError> {
-                    use verifiable_storage::VersionedRepository;
+                    use verifiable_storage::ChainedRepository;
 
-                    let events = <Self as verifiable_storage::VersionedRepository<#item_type>>::get_history(self, prefix).await?;
+                    let events = <Self as verifiable_storage::ChainedRepository<#item_type>>::get_history(self, prefix).await?;
                     let saids: Vec<String> = events.iter().map(|e| e.#id_field_ident.clone()).collect();
                     let signatures = self.get_signatures_by_saids(&saids).await?;
 
@@ -268,21 +268,21 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
     };
 
     let expanded = if versioned {
-        // Generate VersionedRepository impl
+        // Generate ChainedRepository impl
         quote! {
             #new_impl
 
             #[async_trait::async_trait]
-            impl verifiable_storage::VersionedRepository<#item_type> for #repo_name {
+            impl verifiable_storage::ChainedRepository<#item_type> for #repo_name {
                 async fn create(&self, mut item: #item_type) -> Result<#item_type, verifiable_storage::StorageError> {
-                    use verifiable_storage::Versioned;
+                    use verifiable_storage::Chained;
                     item.derive_prefix()?;
                     let _ = self.insert(item.clone()).await?;
                     Ok(item)
                 }
 
                 async fn update(&self, mut item: #item_type) -> Result<#item_type, verifiable_storage::StorageError> {
-                    use verifiable_storage::Versioned;
+                    use verifiable_storage::Chained;
                     item.increment()?;
                     let _ = self.insert(item.clone()).await?;
                     Ok(item)

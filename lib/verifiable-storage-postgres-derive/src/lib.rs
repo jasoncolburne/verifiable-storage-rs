@@ -9,7 +9,7 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 /// ## Individual Repository Mode
 /// Applied to a repository struct with `item_type` and `table`, generates:
 /// - `new(pool: PgPool) -> Self` constructor
-/// - `VersionedRepository<T>` or `UnversionedRepository<T>` implementation
+/// - `ChainedRepository<T>` or `UnversionedRepository<T>` implementation
 ///
 /// The struct must have a `pool: PgPool` field.
 /// The item type must implement `Storable + Serialize + DeserializeOwned`.
@@ -19,7 +19,7 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 /// - `table`: The table name for storage (required)
 /// - `id_field`: The field name containing the SAID (default: "said")
 /// - `prefix_field`: The field name containing the prefix (default: "prefix", only for versioned)
-/// - `versioned`: Whether to generate VersionedRepository (default: true)
+/// - `versioned`: Whether to generate ChainedRepository (default: true)
 ///
 /// Example:
 /// ```text
@@ -113,7 +113,7 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
         // Combined repository mode - generate RepositoryConnection
         generate_combined_repository(repo_name, &input, migrations.as_deref())
     } else {
-        // Individual repository mode - generate VersionedRepository/UnversionedRepository
+        // Individual repository mode - generate ChainedRepository/UnversionedRepository
         let item_type = item_type.expect("Missing item_type in #[stored(...)]");
         let table_name = table_name.expect("Missing table in #[stored(...)]");
         generate_individual_repository(
@@ -243,12 +243,12 @@ fn generate_individual_repository(
             #new_impl
 
             #[async_trait::async_trait]
-            impl verifiable_storage::VersionedRepository<#item_type> for #repo_name {
+            impl verifiable_storage::ChainedRepository<#item_type> for #repo_name {
                 async fn create(
                     &self,
                     mut item: #item_type,
                 ) -> Result<#item_type, verifiable_storage::StorageError> {
-                    use verifiable_storage::Versioned;
+                    use verifiable_storage::Chained;
                     item.derive_prefix()?;
                     self.insert(item).await
                 }
@@ -257,7 +257,7 @@ fn generate_individual_repository(
                     &self,
                     mut item: #item_type,
                 ) -> Result<#item_type, verifiable_storage::StorageError> {
-                    use verifiable_storage::Versioned;
+                    use verifiable_storage::Chained;
                     item.increment()?;
                     self.insert(item).await
                 }

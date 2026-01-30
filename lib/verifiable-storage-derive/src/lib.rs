@@ -119,13 +119,13 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
     None
 }
 
-/// Derive macro for SelfAddressed trait (and optionally Versioned)
+/// Derive macro for SelfAddressed trait (and optionally Chained)
 ///
 /// Generates implementations for self-addressed types with content-based identifiers.
 /// Requires a field marked with `#[said]` attribute.
 ///
-/// If `#[prefix]`, `#[previous]`, and `#[version]` fields are present, also generates
-/// `Versioned` trait implementation for version-chained types.
+/// If `#[prefix]` and `#[previous]` fields are present, also generates
+/// `Chained` trait implementation for cryptographically-linked types.
 ///
 /// ## Generated methods
 ///
@@ -138,13 +138,13 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
 /// - `verify_said()` - Verify SAID matches content
 /// - `get_said()` - Get current SAID
 ///
-/// ### Generated when versioned (Versioned trait):
+/// ### Generated when chained (Chained trait):
 /// - `derive_prefix()` - Compute prefix from inception SAID
 /// - `verify_prefix()` - Verify prefix matches content
 /// - `get_prefix()` - Get current prefix
-/// - `increment()` - Increment version for updates
+/// - `increment()` - Increment for chain updates (also increments version if present)
 /// - `verify_unchanged(proposed)` - Check if proposed update has actual changes
-/// - `get_version()`, `get_previous()`, `get_created_at()`, `set_created_at()`
+/// - `get_previous()`, `get_created_at()`, `set_created_at()`
 ///
 /// ## Storage-managed fields
 ///
@@ -152,10 +152,10 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
 /// - `#[said]` - empty string (computed by `derive_said()` or `derive_prefix()`)
 /// - `#[prefix]` - empty string (computed by `derive_prefix()`)
 /// - `#[previous]` - None
-/// - `#[version]` - 0
+/// - `#[version]` (optional) - 0
 /// - `#[created_at]` - current timestamp
 ///
-/// ## Example (unversioned)
+/// ## Example (unchained)
 ///
 /// ```text
 /// #[derive(SelfAddressed)]
@@ -169,7 +169,7 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
 /// // Use: let record = AuditRecord::create(data)?;
 /// ```
 ///
-/// ## Example (versioned)
+/// ## Example (chained with optional version)
 ///
 /// ```text
 /// #[derive(SelfAddressed)]
@@ -180,7 +180,7 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<String> {
 ///     pub prefix: String,
 ///     #[previous]
 ///     pub previous: Option<String>,
-///     #[version]
+///     #[version]  // optional
 ///     pub version: u64,
 ///     #[created_at]
 ///     pub created_at: StorageDatetime,
@@ -209,14 +209,12 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         .expect("No field marked with #[said] attribute found");
     let said_field_name = said_field.ident.as_ref().unwrap();
 
-    // Check for versioned fields
+    // Check for chained fields (prefix + previous makes it chained)
     let prefix_field = fields.iter().find(|f| has_attr(f, "prefix"));
     let previous_field = fields.iter().find(|f| has_attr(f, "previous"));
-    let version_field = fields.iter().find(|f| has_attr(f, "version"));
     let created_at_field = fields.iter().find(|f| has_attr(f, "created_at"));
 
-    let is_versioned =
-        prefix_field.is_some() && previous_field.is_some() && version_field.is_some();
+    let is_chained = prefix_field.is_some() && previous_field.is_some();
 
     // Collect fields for new() method - exclude storage-managed fields
     let mut new_params = Vec::new();
@@ -244,11 +242,13 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         }
     }
 
-    // Generate create() - calls derive_prefix() for versioned, derive_said() for unversioned
-    let create_derive_call = if is_versioned {
+    // Generate create() - calls derive_prefix() + derive_said() for chained, just derive_said() for unchained
+    let create_derive_call = if is_chained {
         quote! {
-            use verifiable_storage::Versioned;
+            use verifiable_storage::Chained;
             item.derive_prefix()?;
+            use verifiable_storage::SelfAddressed;
+            item.derive_said()?;
         }
     } else {
         quote! {
@@ -257,11 +257,13 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Generate Versioned impl if applicable
-    let versioned_impl = if is_versioned {
+    // Check for optional version field
+    let version_field = fields.iter().find(|f| has_attr(f, "version"));
+
+    // Generate Chained impl if applicable
+    let chained_impl = if is_chained {
         let prefix_field_name = prefix_field.unwrap().ident.as_ref().unwrap();
         let previous_field_name = previous_field.unwrap().ident.as_ref().unwrap();
-        let version_field_name = version_field.unwrap().ident.as_ref().unwrap();
 
         let created_at_get = if let Some(field) = created_at_field {
             let field_name = field.ident.as_ref().unwrap();
@@ -277,25 +279,44 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
             quote! {}
         };
 
+        // Optional version increment for self
+        let version_increment_self = if let Some(field) = version_field {
+            let field_name = field.ident.as_ref().unwrap();
+            quote! { self.#field_name += 1; }
+        } else {
+            quote! {}
+        };
+
+        // Optional version increment for next_if_unchanged
+        let version_increment_next = if let Some(field) = version_field {
+            let field_name = field.ident.as_ref().unwrap();
+            quote! { next_if_unchanged.#field_name += 1; }
+        } else {
+            quote! {}
+        };
+
         quote! {
-            impl verifiable_storage::Versioned for #name {
+            impl verifiable_storage::Chained for #name {
                 fn derive_prefix(&mut self) -> Result<(), verifiable_storage::StorageError> {
-                    use verifiable_storage::SelfAddressed;
+                    // Set both said and prefix to placeholders
+                    self.#said_field_name = "#".repeat(44);
                     self.#prefix_field_name = "#".repeat(44);
-                    self.derive_said()?;
-                    self.#prefix_field_name = self.#said_field_name.clone();
+                    // Compute SAID and use as prefix
+                    self.#prefix_field_name = verifiable_storage::compute_said(self)?;
                     Ok(())
                 }
 
                 fn verify_prefix(&self) -> Result<(), verifiable_storage::StorageError> {
-                    use verifiable_storage::SelfAddressed;
                     let mut copy = self.clone();
-                    copy.derive_prefix()?;
-                    if copy.#said_field_name != self.#said_field_name || copy.#prefix_field_name != self.#prefix_field_name {
+                    // Set both to placeholders
+                    copy.#said_field_name = "#".repeat(44);
+                    copy.#prefix_field_name = "#".repeat(44);
+                    // Compute and compare
+                    let prefix = verifiable_storage::compute_said(&copy)?;
+                    if prefix != self.#prefix_field_name {
                         return Err(verifiable_storage::StorageError::InvalidSaid(format!(
-                            "SAID prefix verification failed: expected said={}, prefix={}, got said={}, prefix={}",
-                            self.#said_field_name, self.#prefix_field_name,
-                            copy.#said_field_name, copy.#prefix_field_name
+                            "Prefix verification failed: expected {}, got {}",
+                            self.#prefix_field_name, prefix
                         )));
                     }
                     Ok(())
@@ -309,7 +330,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     use verifiable_storage::SelfAddressed;
                     let old_id = self.#said_field_name.clone();
                     self.#previous_field_name = Some(old_id);
-                    self.#version_field_name += 1;
+                    #version_increment_self
                     self.set_created_at(verifiable_storage::StorageDatetime::now());
                     self.derive_said()?;
                     Ok(())
@@ -319,14 +340,10 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     use verifiable_storage::SelfAddressed;
                     let mut next_if_unchanged = self.clone();
                     next_if_unchanged.#previous_field_name = Some(self.#said_field_name.clone());
-                    next_if_unchanged.#version_field_name += 1;
+                    #version_increment_next
                     next_if_unchanged.set_created_at(proposed.get_created_at().unwrap_or_else(verifiable_storage::StorageDatetime::now));
                     next_if_unchanged.derive_said()?;
                     Ok(next_if_unchanged.#said_field_name == proposed.#said_field_name)
-                }
-
-                fn get_version(&self) -> u64 {
-                    self.#version_field_name
                 }
 
                 fn get_created_at(&self) -> Option<verifiable_storage::StorageDatetime> {
@@ -344,25 +361,11 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
 
             impl PartialEq for #name {
                 fn eq(&self, other: &Self) -> bool {
-                    self.#prefix_field_name == other.#prefix_field_name
-                        && self.#version_field_name == other.#version_field_name
+                    self.#said_field_name == other.#said_field_name
                 }
             }
 
             impl Eq for #name {}
-
-            impl PartialOrd for #name {
-                fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                    Some(self.cmp(other))
-                }
-            }
-
-            impl Ord for #name {
-                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                    (&self.#prefix_field_name, self.#version_field_name)
-                        .cmp(&(&other.#prefix_field_name, other.#version_field_name))
-                }
-            }
         }
     } else {
         quote! {}
@@ -449,8 +452,8 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     &self.#said_field_name
                 }
 
-                fn is_versioned() -> bool {
-                    #is_versioned
+                fn is_chained() -> bool {
+                    #is_chained
                 }
             }
         }
@@ -511,7 +514,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
             }
         }
 
-        #versioned_impl
+        #chained_impl
 
         #storable_impl
     };

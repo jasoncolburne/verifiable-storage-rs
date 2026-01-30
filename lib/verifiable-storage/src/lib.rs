@@ -7,14 +7,14 @@
 //!
 //! - **SAID** (Self-Addressing IDentifier): A content hash that serves as both
 //!   the identifier and integrity check for data.
-//! - **Versioned**: Data with a stable prefix (lineage identifier), version, and
-//!   cryptographic linking between versions via previous pointers.
+//! - **Chained**: Data with a stable prefix (lineage identifier) and
+//!   cryptographic linking via previous pointers.
 //!
 //! # Traits
 //!
 //! - [`SelfAddressed`]: Types with a content-derived SAID
-//! - [`Versioned`]: Versioned types with prefix, version, and previous pointer
-//! - [`VersionedRepository`]: Storage for versioned types
+//! - [`Chained`]: Chained types with prefix and previous pointer
+//! - [`ChainedRepository`]: Storage for chained types
 //! - [`UnversionedRepository`]: Storage for simple SAID-addressed types
 
 #![cfg_attr(
@@ -34,9 +34,9 @@ pub use query::{
     ColumnQuery, Delete, Filter, Join, Order, Query, QueryExecutor, TransactionExecutor, Value,
 };
 pub use repository::{
-    ConnectionConfig, RepositoryConnection, UnversionedRepository, VersionedRepository,
+    ChainedRepository, ConnectionConfig, RepositoryConnection, UnchainedRepository,
 };
-pub use said::{SelfAddressed, Versioned, compute_said};
+pub use said::{Chained, SelfAddressed, compute_said};
 pub use storable::Storable;
 pub use time::StorageDatetime;
 
