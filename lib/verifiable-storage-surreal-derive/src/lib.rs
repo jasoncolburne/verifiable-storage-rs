@@ -6,7 +6,7 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 ///
 /// Applied to a repository struct, generates either:
 /// - `impl ChainedRepository<T>` when `versioned = true` (default)
-/// - `impl UnversionedRepository<T>` when `versioned = false`
+/// - `impl UnchainedRepository<T>` when `versioned = false`
 ///
 /// Also generates a `new()` constructor that connects to SurrealDB.
 ///
@@ -340,12 +340,12 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
             #signature_methods
         }
     } else {
-        // Generate UnversionedRepository impl
+        // Generate UnchainedRepository impl
         quote! {
             #new_impl
 
             #[async_trait::async_trait]
-            impl verifiable_storage::UnversionedRepository<#item_type> for #repo_name {
+            impl verifiable_storage::UnchainedRepository<#item_type> for #repo_name {
                 async fn create(&self, mut item: #item_type) -> Result<#item_type, verifiable_storage::StorageError> {
                     use verifiable_storage::SelfAddressed;
                     item.derive_said()?;
