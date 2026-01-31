@@ -18,8 +18,8 @@ use syn::{DeriveInput, Lit, parse_macro_input};
 /// - `item_type`: The type to implement the repository for (required)
 /// - `table`: The table name for storage (required)
 /// - `id_field`: The field name containing the SAID (default: "said")
-/// - `prefix_field`: The field name containing the prefix (default: "prefix", only for versioned)
-/// - `versioned`: Whether to generate ChainedRepository (default: true)
+/// - `prefix_field`: The field name containing the prefix (default: "prefix", only for chained)
+/// - `chained`: Whether to generate ChainedRepository (default: true)
 ///
 /// Example:
 /// ```text
@@ -65,7 +65,7 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
     let mut table_name: Option<String> = None;
     let mut id_field = "said".to_string();
     let mut prefix_field = "prefix".to_string();
-    let mut versioned = true;
+    let mut chained = true;
     let mut migrations: Option<String> = None;
 
     stored_attr
@@ -91,11 +91,11 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
                 if let Lit::Str(s) = lit {
                     prefix_field = s.value();
                 }
-            } else if meta.path.is_ident("versioned") {
+            } else if meta.path.is_ident("chained") {
                 meta.input.parse::<syn::Token![=]>()?;
                 let lit: Lit = meta.input.parse()?;
                 if let Lit::Bool(b) = lit {
-                    versioned = b.value();
+                    chained = b.value();
                 }
             } else if meta.path.is_ident("migrations") {
                 meta.input.parse::<syn::Token![=]>()?;
@@ -122,7 +122,7 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
             &table_name,
             &id_field,
             &prefix_field,
-            versioned,
+            chained,
         )
     }
 }
@@ -223,7 +223,7 @@ fn generate_individual_repository(
     table_name: &str,
     id_field: &str,
     prefix_field: &str,
-    versioned: bool,
+    chained: bool,
 ) -> TokenStream {
     // Generate the new() constructor and table_name method
     let new_impl = quote! {
@@ -238,7 +238,7 @@ fn generate_individual_repository(
         }
     };
 
-    let expanded = if versioned {
+    let expanded = if chained {
         quote! {
             #new_impl
 
