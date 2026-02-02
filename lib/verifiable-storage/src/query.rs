@@ -386,6 +386,11 @@ impl<T: Storable> Delete<T> {
         self.filter(Filter::Gte(field.into(), value.into()))
     }
 
+    /// Add a less-than-or-equal filter.
+    pub fn lte(self, field: impl Into<String>, value: impl Into<Value>) -> Self {
+        self.filter(Filter::Lte(field.into(), value.into()))
+    }
+
     /// Add an IN filter.
     pub fn r#in(self, field: impl Into<String>, values: impl Into<Value>) -> Self {
         self.filter(Filter::In(field.into(), values.into()))
