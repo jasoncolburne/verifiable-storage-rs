@@ -1,6 +1,6 @@
-PACKAGES := verifiable-storage verifiable-storage-derive verifiable-storage-postgres verifiable-storage-postgres-derive verifiable-storage-surreal verifiable-storage-surreal-derive
+PACKAGES := verifiable-storage verifiable-storage-derive verifiable-storage-postgres verifiable-storage-postgres-derive
 LIBS_DIR := lib
-LIBS_SUBDIRS := verifiable-storage verifiable-storage-derive verifiable-storage-postgres verifiable-storage-postgres-derive verifiable-storage-surreal verifiable-storage-surreal-derive
+LIBS_SUBDIRS := verifiable-storage verifiable-storage-derive verifiable-storage-postgres verifiable-storage-postgres-derive
 
 .PHONY: all build clean clippy deny fmt fmt-check install-deny test
 
