@@ -67,6 +67,7 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
     let mut prefix_field = "prefix".to_string();
     let mut chained = true;
     let mut migrations: Option<String> = None;
+    let mut version_field: Option<String> = None;
 
     stored_attr
         .parse_nested_meta(|meta| {
@@ -97,6 +98,12 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
                 if let Lit::Bool(b) = lit {
                     chained = b.value();
                 }
+            } else if meta.path.is_ident("version_field") {
+                meta.input.parse::<syn::Token![=]>()?;
+                let lit: Lit = meta.input.parse()?;
+                if let Lit::Str(s) = lit {
+                    version_field = Some(s.value());
+                }
             } else if meta.path.is_ident("migrations") {
                 meta.input.parse::<syn::Token![=]>()?;
                 let lit: Lit = meta.input.parse()?;
@@ -123,6 +130,7 @@ pub fn derive_stored(input: TokenStream) -> TokenStream {
             &id_field,
             &prefix_field,
             chained,
+            version_field.as_deref(),
         )
     }
 }
@@ -224,7 +232,36 @@ fn generate_individual_repository(
     id_field: &str,
     prefix_field: &str,
     chained: bool,
+    version_field: Option<&str>,
 ) -> TokenStream {
+    // Resolve version column name for ORDER BY
+    let get_latest_order_col = version_field.unwrap_or("version");
+
+    let get_history_order_by = if let Some(vf) = version_field {
+        quote! { let query = query.order_by(#vf, verifiable_storage_postgres::Order::Asc); }
+    } else {
+        quote! {}
+    };
+
+    let get_history_since_impl = if let Some(vf) = version_field {
+        quote! {
+            async fn get_history_since(
+                &self,
+                prefix: &str,
+                since_serial: u64,
+            ) -> Result<Vec<#item_type>, verifiable_storage::StorageError> {
+                use verifiable_storage_postgres::QueryExecutor;
+                let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
+                    .eq(#prefix_field, prefix)
+                    .gte(#vf, since_serial)
+                    .order_by(#vf, verifiable_storage_postgres::Order::Asc);
+                self.pool.fetch(query).await
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     // Generate the new() constructor and table_name method
     let new_impl = quote! {
         impl #repo_name {
@@ -288,7 +325,7 @@ fn generate_individual_repository(
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
                         .eq(#prefix_field, prefix)
-                        .order_by("version", verifiable_storage_postgres::Order::Desc)
+                        .order_by(#get_latest_order_col, verifiable_storage_postgres::Order::Desc)
                         .limit(1);
                     self.pool.fetch_optional(query).await
                 }
@@ -300,8 +337,11 @@ fn generate_individual_repository(
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
                         .eq(#prefix_field, prefix);
+                    #get_history_order_by
                     self.pool.fetch(query).await
                 }
+
+                #get_history_since_impl
 
                 async fn exists(
                     &self,

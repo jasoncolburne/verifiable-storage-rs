@@ -116,6 +116,22 @@ where
     ///
     /// Returns `true` if at least one item exists for the given prefix.
     async fn exists(&self, prefix: &str) -> Result<bool, StorageError>;
+
+    /// Get history for a prefix starting from a given version serial (inclusive).
+    ///
+    /// Returns items with version >= `since_serial`, ordered by version ascending.
+    /// Default implementation returns an error; repositories with a version field
+    /// will override this with a generated implementation.
+    async fn get_history_since(
+        &self,
+        prefix: &str,
+        since_serial: u64,
+    ) -> Result<Vec<T>, StorageError> {
+        let _ = (prefix, since_serial);
+        Err(StorageError::StorageError(
+            "get_history_since not implemented for this repository".to_string(),
+        ))
+    }
 }
 
 /// Repository trait for simple SelfAddressed types without versioning.
