@@ -444,11 +444,6 @@ pub trait QueryExecutor: Send + Sync {
 
     /// Begin a transaction. The returned executor can be used for queries within the transaction.
     async fn begin_transaction(&self) -> Result<Self::Transaction, StorageError>;
-
-    /// Fetch column values as strings using a ColumnQuery.
-    ///
-    /// Unlike `fetch` which returns deserialized objects, this returns raw column values.
-    async fn fetch_column(&self, query: ColumnQuery) -> Result<Vec<String>, StorageError>;
 }
 
 /// Trait for executing queries within a transaction.

@@ -39,6 +39,46 @@ impl PgPool {
     pub fn inner(&self) -> &sqlx::PgPool {
         &self.0
     }
+
+    /// Fetch typed column values using a ColumnQuery.
+    pub async fn fetch_column<V>(&self, query: ColumnQuery) -> Result<Vec<V>, StorageError>
+    where
+        V: for<'r> sqlx::Decode<'r, Postgres> + sqlx::Type<Postgres> + Send + Unpin + 'static,
+    {
+        use sqlx::Row;
+
+        let distinct = if query.distinct { "DISTINCT " } else { "" };
+        let (where_clause, _) = build_where_clause(&query.filters, 1);
+        let order_clause = match query.order {
+            Some(Order::Asc) => format!(" ORDER BY {} ASC", query.column),
+            Some(Order::Desc) => format!(" ORDER BY {} DESC", query.column),
+            None => String::new(),
+        };
+        let limit_clause = query
+            .limit
+            .map(|l| format!(" LIMIT {}", l))
+            .unwrap_or_default();
+
+        let sql = format!(
+            "SELECT {}{} FROM {}{}{}{}",
+            distinct, query.column, query.table, where_clause, order_clause, limit_clause
+        );
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let rows = sqlx::query_with(&sql, args)
+            .fetch_all(&self.0)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        let values: Vec<V> = rows
+            .iter()
+            .map(|row| row.try_get(0))
+            .collect::<Result<_, _>>()
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        Ok(values)
+    }
 }
 
 impl Deref for PgPool {
@@ -324,38 +364,6 @@ impl QueryExecutor for PgPool {
             .await
             .map_err(|e| StorageError::StorageError(e.to_string()))?;
         Ok(PgTransaction { tx })
-    }
-
-    async fn fetch_column(&self, query: ColumnQuery) -> Result<Vec<String>, StorageError> {
-        use sqlx::Row;
-
-        let distinct = if query.distinct { "DISTINCT " } else { "" };
-        let (where_clause, _) = build_where_clause(&query.filters, 1);
-        let order_clause = match query.order {
-            Some(Order::Asc) => format!(" ORDER BY {} ASC", query.column),
-            Some(Order::Desc) => format!(" ORDER BY {} DESC", query.column),
-            None => String::new(),
-        };
-        let limit_clause = query
-            .limit
-            .map(|l| format!(" LIMIT {}", l))
-            .unwrap_or_default();
-
-        let sql = format!(
-            "SELECT {}{} FROM {}{}{}{}",
-            distinct, query.column, query.table, where_clause, order_clause, limit_clause
-        );
-
-        let mut args = PgArguments::default();
-        bind_filters(&mut args, &query.filters)?;
-
-        let rows = sqlx::query_with(&sql, args)
-            .fetch_all(&self.0)
-            .await
-            .map_err(|e| StorageError::StorageError(e.to_string()))?;
-
-        let values: Vec<String> = rows.iter().map(|row| row.get(0)).collect();
-        Ok(values)
     }
 }
 
