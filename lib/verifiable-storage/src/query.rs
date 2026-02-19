@@ -295,6 +295,8 @@ pub struct ColumnQuery {
     pub order: Option<Order>,
     /// Maximum number of results.
     pub limit: Option<u64>,
+    /// GROUP BY columns.
+    pub group_by: Vec<String>,
 }
 
 impl ColumnQuery {
@@ -307,6 +309,7 @@ impl ColumnQuery {
             filters: Vec::new(),
             order: None,
             limit: None,
+            group_by: Vec::new(),
         }
     }
 
@@ -337,6 +340,12 @@ impl ColumnQuery {
     /// Set the maximum number of results.
     pub fn limit(mut self, limit: u64) -> Self {
         self.limit = Some(limit);
+        self
+    }
+
+    /// Add a GROUP BY column.
+    pub fn group_by(mut self, column: impl Into<String>) -> Self {
+        self.group_by.push(column.into());
         self
     }
 }
