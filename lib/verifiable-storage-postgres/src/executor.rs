@@ -79,6 +79,45 @@ impl PgPool {
             .map_err(|e| StorageError::StorageError(e.to_string()))?;
         Ok(values)
     }
+
+    /// Execute a grouped COUNT query.
+    ///
+    /// Generates `SELECT COUNT(column) FROM table WHERE ... GROUP BY ... ORDER BY COUNT(column) DESC LIMIT ...`.
+    /// Returns the counts as a `Vec<i64>`, ordered by count descending.
+    pub async fn fetch_grouped_count(&self, query: ColumnQuery) -> Result<Vec<i64>, StorageError> {
+        use sqlx::Row;
+
+        let (where_clause, _) = build_where_clause(&query.filters, 1);
+        let group_clause = if query.group_by.is_empty() {
+            String::new()
+        } else {
+            format!(" GROUP BY {}", query.group_by.join(", "))
+        };
+        let limit_clause = query
+            .limit
+            .map(|l| format!(" LIMIT {}", l))
+            .unwrap_or_default();
+
+        let sql = format!(
+            "SELECT COUNT({}) FROM {}{}{} ORDER BY COUNT({}) DESC{}",
+            query.column, query.table, where_clause, group_clause, query.column, limit_clause
+        );
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let rows = sqlx::query_with(&sql, args)
+            .fetch_all(&self.0)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        let values: Vec<i64> = rows
+            .iter()
+            .map(|row| row.try_get(0))
+            .collect::<Result<_, _>>()
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        Ok(values)
+    }
 }
 
 impl Deref for PgPool {
