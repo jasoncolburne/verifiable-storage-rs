@@ -176,6 +176,14 @@ fn build_where_clause(filters: &[Filter], start_param: usize) -> (String, usize)
             }
             Filter::IsNull(field) => format!("{} IS NULL", field),
             Filter::IsNotNull(field) => format!("{} IS NOT NULL", field),
+            Filter::GteScalarSubquery(field, subquery) => {
+                let (sub_where, sub_count) = build_where_clause(&subquery.filters, param_idx);
+                param_idx += sub_count;
+                format!(
+                    "{} >= (SELECT {} FROM {}{} LIMIT 1)",
+                    field, subquery.select_field, subquery.table, sub_where
+                )
+            }
         };
         clauses.push(clause);
     }
@@ -199,6 +207,9 @@ fn bind_filters(args: &mut PgArguments, filters: &[Filter]) -> Result<(), Storag
             }
             Filter::IsNull(_) | Filter::IsNotNull(_) => {
                 // No binding needed
+            }
+            Filter::GteScalarSubquery(_, subquery) => {
+                bind_filters(args, &subquery.filters)?;
             }
         }
     }

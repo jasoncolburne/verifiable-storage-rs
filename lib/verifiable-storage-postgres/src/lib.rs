@@ -59,6 +59,6 @@ pub use sqlx::migrate::Migrator;
 // Re-export core types for convenience
 pub use verifiable_storage::{
     Chained, ChainedRepository, ColumnQuery, ConnectionConfig, Delete, Filter, Order, Query,
-    QueryExecutor, RepositoryConnection, SelfAddressed, Storable, StorageDatetime, StorageError,
-    TransactionExecutor, UnchainedRepository, Value, compute_said,
+    QueryExecutor, RepositoryConnection, ScalarSubquery, SelfAddressed, Storable, StorageDatetime,
+    StorageError, TransactionExecutor, UnchainedRepository, Value, compute_said,
 };
