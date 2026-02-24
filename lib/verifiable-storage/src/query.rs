@@ -99,6 +99,34 @@ impl From<&StorageDatetime> for Value {
     }
 }
 
+/// A scalar subquery that resolves to a single value.
+///
+/// Generates SQL like: `(SELECT select_field FROM table WHERE ... LIMIT 1)`
+#[derive(Debug, Clone)]
+pub struct ScalarSubquery {
+    /// The table to query.
+    pub table: String,
+    /// The field to select (single column).
+    pub select_field: String,
+    /// Filter conditions for the subquery.
+    pub filters: Vec<Filter>,
+}
+
+impl ScalarSubquery {
+    /// Create a new scalar subquery.
+    pub fn new(
+        table: impl Into<String>,
+        select_field: impl Into<String>,
+        filters: Vec<Filter>,
+    ) -> Self {
+        Self {
+            table: table.into(),
+            select_field: select_field.into(),
+            filters,
+        }
+    }
+}
+
 /// Filter conditions for queries.
 #[derive(Debug, Clone)]
 pub enum Filter {
@@ -120,6 +148,8 @@ pub enum Filter {
     IsNull(String),
     /// field IS NOT NULL
     IsNotNull(String),
+    /// field >= (SELECT select_field FROM table WHERE ... LIMIT 1)
+    GteScalarSubquery(String, ScalarSubquery),
 }
 
 /// Sort order.
@@ -241,6 +271,13 @@ impl<T: Storable> Query<T> {
     /// Add a less-than-or-equal filter.
     pub fn lte(self, field: impl Into<String>, value: impl Into<Value>) -> Self {
         self.filter(Filter::Lte(field.into(), value.into()))
+    }
+
+    /// Add a >= scalar subquery filter.
+    ///
+    /// Generates: `field >= (SELECT select_field FROM table WHERE ... LIMIT 1)`
+    pub fn gte_scalar_subquery(self, field: impl Into<String>, subquery: ScalarSubquery) -> Self {
+        self.filter(Filter::GteScalarSubquery(field.into(), subquery))
     }
 
     /// Add an order-by clause.
@@ -564,6 +601,76 @@ mod tests {
         assert!(matches!(
             &query.filters[0],
             Filter::Eq(field, Value::String(val)) if field == "status" && val == "active"
+        ));
+    }
+
+    #[test]
+    fn scalar_subquery_new() {
+        let subquery = ScalarSubquery::new(
+            "events",
+            "serial",
+            vec![Filter::Eq(
+                "said".to_string(),
+                Value::String("abc".to_string()),
+            )],
+        );
+        assert_eq!(subquery.table, "events");
+        assert_eq!(subquery.select_field, "serial");
+        assert_eq!(subquery.filters.len(), 1);
+    }
+
+    #[test]
+    fn query_gte_scalar_subquery() {
+        use crate::Storable;
+
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        struct TestItem {
+            said: String,
+        }
+
+        impl Storable for TestItem {
+            fn table_name() -> &'static str {
+                "test_items"
+            }
+            fn columns() -> &'static [&'static str] {
+                &["said"]
+            }
+            fn column_types() -> &'static [&'static str] {
+                &["text"]
+            }
+            fn json_keys() -> &'static [&'static str] {
+                &["said"]
+            }
+            fn insert_sql() -> &'static str {
+                "INSERT INTO test_items (said) VALUES ($1)"
+            }
+            fn select_all_sql() -> &'static str {
+                "SELECT * FROM test_items"
+            }
+            fn select_by_id_sql() -> &'static str {
+                "SELECT * FROM test_items WHERE said = $1"
+            }
+            fn id(&self) -> &str {
+                &self.said
+            }
+            fn is_chained() -> bool {
+                false
+            }
+        }
+
+        let subquery = ScalarSubquery::new(
+            "events",
+            "serial",
+            vec![Filter::Eq(
+                "said".to_string(),
+                Value::String("abc".to_string()),
+            )],
+        );
+        let query = Query::<TestItem>::new().gte_scalar_subquery("serial", subquery);
+        assert_eq!(query.filters.len(), 1);
+        assert!(matches!(
+            &query.filters[0],
+            Filter::GteScalarSubquery(field, sq) if field == "serial" && sq.table == "events"
         ));
     }
 }
