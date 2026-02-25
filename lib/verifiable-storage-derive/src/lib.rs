@@ -29,6 +29,14 @@ fn has_attr(field: &syn::Field, attr_name: &str) -> bool {
         .any(|attr| attr.path().is_ident(attr_name))
 }
 
+/// Check if the struct has a specific container attribute
+fn has_container_attr(input: &DeriveInput, attr_name: &str) -> bool {
+    input
+        .attrs
+        .iter()
+        .any(|attr| attr.path().is_ident(attr_name))
+}
+
 /// Check if a field has #[column(skip)]
 fn has_column_skip(field: &syn::Field) -> bool {
     for attr in &field.attrs {
@@ -192,7 +200,9 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
 /// ```
 #[proc_macro_derive(
     SelfAddressed,
-    attributes(said, prefix, previous, version, created_at, storable, column)
+    attributes(
+        said, prefix, previous, version, created_at, storable, column, crate_new
+    )
 )]
 pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -486,6 +496,14 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    let crate_new = has_container_attr(&input, "crate_new");
+
+    let new_vis: proc_macro2::TokenStream = if crate_new {
+        quote! { pub(crate) }
+    } else {
+        quote! { pub }
+    };
+
     let expanded = quote! {
         impl #name {
             /// Create a new instance with storage-managed fields initialized to defaults.
@@ -496,7 +514,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
             /// - `previous`: None
             /// - `version`: 0
             /// - `created_at`: current timestamp
-            pub fn new(#(#new_params),*) -> Self {
+            #new_vis fn new(#(#new_params),*) -> Self {
                 Self {
                     #(#new_field_inits),*
                 }
@@ -508,7 +526,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
             /// 1. Creates the instance with `new()` (sets created_at to now())
             /// 2. Computes the SAID (and prefix for versioned types)
             /// 3. Returns the fully-initialized instance
-            pub fn create(#(#new_params),*) -> Result<Self, verifiable_storage::StorageError> {
+            #new_vis fn create(#(#new_params),*) -> Result<Self, verifiable_storage::StorageError> {
                 let mut item = Self::new(#(#new_param_names),*);
                 #create_derive_call
                 Ok(item)
