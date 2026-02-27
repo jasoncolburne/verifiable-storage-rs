@@ -184,6 +184,29 @@ fn build_where_clause(filters: &[Filter], start_param: usize) -> (String, usize)
                     field, subquery.select_field, subquery.table, sub_where
                 )
             }
+            Filter::NotExists(sub) => {
+                let mut conditions: Vec<String> = sub
+                    .correlations
+                    .iter()
+                    .map(|(inner, outer)| {
+                        format!("{}.{} = {}.{}", sub.alias, inner, sub.outer_table, outer)
+                    })
+                    .collect();
+
+                let (filter_clause, filter_count) = build_where_clause(&sub.filters, param_idx);
+                param_idx += filter_count;
+                if !filter_clause.is_empty() {
+                    // Strip the " WHERE " prefix (7 chars) to get bare conditions
+                    conditions.push(filter_clause[7..].to_string());
+                }
+
+                format!(
+                    "NOT EXISTS (SELECT 1 FROM {} {} WHERE {})",
+                    sub.table,
+                    sub.alias,
+                    conditions.join(" AND ")
+                )
+            }
         };
         clauses.push(clause);
     }
@@ -210,6 +233,9 @@ fn bind_filters(args: &mut PgArguments, filters: &[Filter]) -> Result<(), Storag
             }
             Filter::GteScalarSubquery(_, subquery) => {
                 bind_filters(args, &subquery.filters)?;
+            }
+            Filter::NotExists(sub) => {
+                bind_filters(args, &sub.filters)?;
             }
         }
     }

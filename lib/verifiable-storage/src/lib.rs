@@ -31,8 +31,8 @@ mod time;
 
 pub use error::StorageError;
 pub use query::{
-    ColumnQuery, Delete, Filter, Join, Order, Query, QueryExecutor, ScalarSubquery,
-    TransactionExecutor, Value,
+    ColumnQuery, CorrelatedSubquery, Delete, Filter, Join, Order, Query, QueryExecutor,
+    ScalarSubquery, TransactionExecutor, Value,
 };
 pub use repository::{
     ChainedRepository, ConnectionConfig, RepositoryConnection, UnchainedRepository,

@@ -127,6 +127,50 @@ impl ScalarSubquery {
     }
 }
 
+/// A correlated subquery — one whose WHERE clause references columns from the outer query.
+///
+/// The "correlation" is the column-to-column join between the inner and outer tables.
+/// For example, to find rows with no successor:
+/// ```sql
+/// NOT EXISTS (SELECT 1 FROM events _cs
+///   WHERE _cs.previous = events.said    -- correlation: inner.previous = outer.said
+///   AND _cs.prefix = $1)                -- filter: bound parameter
+/// ```
+/// Here `_cs.previous = events.said` is the correlation — it ties each inner-query
+/// evaluation to a specific row of the outer query.
+#[derive(Debug, Clone)]
+pub struct CorrelatedSubquery {
+    /// The table for the inner query.
+    pub table: String,
+    /// Alias for the inner table (to disambiguate when inner and outer are the same table).
+    pub alias: String,
+    /// The outer table name (for qualifying correlated column references).
+    pub outer_table: String,
+    /// Column correlations: each `(inner_col, outer_col)` generates
+    /// `alias.inner_col = outer_table.outer_col`.
+    pub correlations: Vec<(String, String)>,
+    /// Additional filter conditions (field names should be alias-qualified).
+    pub filters: Vec<Filter>,
+}
+
+impl CorrelatedSubquery {
+    pub fn new(
+        table: impl Into<String>,
+        alias: impl Into<String>,
+        outer_table: impl Into<String>,
+        correlations: Vec<(String, String)>,
+        filters: Vec<Filter>,
+    ) -> Self {
+        Self {
+            table: table.into(),
+            alias: alias.into(),
+            outer_table: outer_table.into(),
+            correlations,
+            filters,
+        }
+    }
+}
+
 /// Filter conditions for queries.
 #[derive(Debug, Clone)]
 pub enum Filter {
@@ -150,6 +194,8 @@ pub enum Filter {
     IsNotNull(String),
     /// field >= (SELECT select_field FROM table WHERE ... LIMIT 1)
     GteScalarSubquery(String, ScalarSubquery),
+    /// NOT EXISTS (SELECT 1 FROM table alias WHERE correlations AND filters)
+    NotExists(CorrelatedSubquery),
 }
 
 /// Sort order.
