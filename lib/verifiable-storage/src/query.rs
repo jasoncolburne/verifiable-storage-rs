@@ -205,6 +205,20 @@ pub enum Order {
     Desc,
 }
 
+/// A term in an ORDER BY clause.
+#[derive(Debug, Clone)]
+pub enum OrderByTerm {
+    /// A simple column name.
+    Field(String),
+    /// A CASE expression mapping field values to integer sort priorities.
+    ///
+    /// Generates SQL like: `CASE field WHEN 'val1' THEN 0 WHEN 'val2' THEN 1 ... ELSE 999 END`
+    Case {
+        field: String,
+        mapping: Vec<(String, i64)>,
+    },
+}
+
 /// A JOIN clause.
 #[derive(Debug, Clone)]
 pub struct Join {
@@ -226,7 +240,7 @@ pub struct Query<T> {
     /// Filter conditions.
     pub filters: Vec<Filter>,
     /// Order by clauses.
-    pub order_by: Vec<(String, Order)>,
+    pub order_by: Vec<(OrderByTerm, Order)>,
     /// Maximum number of results.
     pub limit: Option<u64>,
     /// Offset for pagination.
@@ -326,9 +340,33 @@ impl<T: Storable> Query<T> {
         self.filter(Filter::GteScalarSubquery(field.into(), subquery))
     }
 
-    /// Add an order-by clause.
+    /// Add an order-by clause for a column name.
     pub fn order_by(mut self, field: impl Into<String>, order: Order) -> Self {
-        self.order_by.push((field.into(), order));
+        self.order_by
+            .push((OrderByTerm::Field(field.into()), order));
+        self
+    }
+
+    /// Add an order-by clause using a CASE expression.
+    ///
+    /// Maps field values to integer sort priorities. Values not in the mapping
+    /// sort last (ELSE 999).
+    ///
+    /// Example: `query.order_by_case("kind", &[("icp", 0), ("rot", 1)], Order::Asc)`
+    /// generates: `CASE kind WHEN 'icp' THEN 0 WHEN 'rot' THEN 1 ELSE 999 END ASC`
+    pub fn order_by_case(
+        mut self,
+        field: impl Into<String>,
+        mapping: &[(&str, i64)],
+        order: Order,
+    ) -> Self {
+        self.order_by.push((
+            OrderByTerm::Case {
+                field: field.into(),
+                mapping: mapping.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
+            },
+            order,
+        ));
         self
     }
 
@@ -663,6 +701,70 @@ mod tests {
         assert_eq!(subquery.table, "events");
         assert_eq!(subquery.select_field, "serial");
         assert_eq!(subquery.filters.len(), 1);
+    }
+
+    #[test]
+    fn query_order_by_case() {
+        use crate::Storable;
+
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+        struct TestItem {
+            said: String,
+        }
+
+        impl Storable for TestItem {
+            fn table_name() -> &'static str {
+                "test_items"
+            }
+            fn columns() -> &'static [&'static str] {
+                &["said"]
+            }
+            fn column_types() -> &'static [&'static str] {
+                &["text"]
+            }
+            fn json_keys() -> &'static [&'static str] {
+                &["said"]
+            }
+            fn insert_sql() -> &'static str {
+                "INSERT INTO test_items (said) VALUES ($1)"
+            }
+            fn select_all_sql() -> &'static str {
+                "SELECT * FROM test_items"
+            }
+            fn select_by_id_sql() -> &'static str {
+                "SELECT * FROM test_items WHERE said = $1"
+            }
+            fn id(&self) -> &str {
+                &self.said
+            }
+            fn is_chained() -> bool {
+                false
+            }
+        }
+
+        let query = Query::<TestItem>::new()
+            .order_by("serial", Order::Asc)
+            .order_by_case(
+                "kind",
+                &[("icp", 0), ("rot", 1), ("ixn", 2), ("cnt", 7)],
+                Order::Asc,
+            )
+            .order_by("said", Order::Asc);
+
+        assert_eq!(query.order_by.len(), 3);
+        assert!(matches!(
+            &query.order_by[0],
+            (OrderByTerm::Field(f), Order::Asc) if f == "serial"
+        ));
+        assert!(matches!(
+            &query.order_by[1],
+            (OrderByTerm::Case { field, mapping }, Order::Asc)
+                if field == "kind" && mapping.len() == 4
+        ));
+        assert!(matches!(
+            &query.order_by[2],
+            (OrderByTerm::Field(f), Order::Asc) if f == "said"
+        ));
     }
 
     #[test]

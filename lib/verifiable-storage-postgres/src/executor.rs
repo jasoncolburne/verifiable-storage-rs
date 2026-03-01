@@ -9,8 +9,8 @@ use sqlx::postgres::{PgArguments, PgPoolOptions};
 use sqlx::{Arguments, Postgres, Transaction};
 use std::ops::Deref;
 use verifiable_storage::{
-    ColumnQuery, Delete, Filter, Join, Order, Query, QueryExecutor, Storable, StorageError,
-    TransactionExecutor, Value,
+    ColumnQuery, Delete, Filter, Join, Order, OrderByTerm, Query, QueryExecutor, Storable,
+    StorageError, TransactionExecutor, Value,
 };
 
 use crate::{bind_insert_values, bind_insert_values_tx, deserialize_row};
@@ -287,19 +287,28 @@ fn bind_value(args: &mut PgArguments, value: &Value) -> Result<(), StorageError>
 }
 
 /// Build ORDER BY clause.
-fn build_order_clause(order_by: &[(String, Order)]) -> String {
+fn build_order_clause(order_by: &[(OrderByTerm, Order)]) -> String {
     if order_by.is_empty() {
         return String::new();
     }
 
     let clauses: Vec<String> = order_by
         .iter()
-        .map(|(field, order)| {
+        .map(|(term, order)| {
             let dir = match order {
                 Order::Asc => "ASC",
                 Order::Desc => "DESC",
             };
-            format!("{} {}", field, dir)
+            match term {
+                OrderByTerm::Field(field) => format!("{} {}", field, dir),
+                OrderByTerm::Case { field, mapping } => {
+                    let whens: Vec<String> = mapping
+                        .iter()
+                        .map(|(val, priority)| format!("WHEN '{}' THEN {}", val, priority))
+                        .collect();
+                    format!("CASE {} {} ELSE 999 END {}", field, whens.join(" "), dir)
+                }
+            }
         })
         .collect();
 
@@ -544,5 +553,59 @@ impl TransactionExecutor for PgTransaction {
             .rollback()
             .await
             .map_err(|e| StorageError::StorageError(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_order_clause_empty() {
+        assert_eq!(build_order_clause(&[]), "");
+    }
+
+    #[test]
+    fn build_order_clause_field() {
+        let clauses = vec![(OrderByTerm::Field("serial".to_string()), Order::Asc)];
+        assert_eq!(build_order_clause(&clauses), " ORDER BY serial ASC");
+    }
+
+    #[test]
+    fn build_order_clause_case() {
+        let clauses = vec![(
+            OrderByTerm::Case {
+                field: "kind".to_string(),
+                mapping: vec![
+                    ("icp".to_string(), 0),
+                    ("rot".to_string(), 1),
+                    ("cnt".to_string(), 7),
+                ],
+            },
+            Order::Asc,
+        )];
+        assert_eq!(
+            build_order_clause(&clauses),
+            " ORDER BY CASE kind WHEN 'icp' THEN 0 WHEN 'rot' THEN 1 WHEN 'cnt' THEN 7 ELSE 999 END ASC"
+        );
+    }
+
+    #[test]
+    fn build_order_clause_mixed() {
+        let clauses = vec![
+            (OrderByTerm::Field("serial".to_string()), Order::Asc),
+            (
+                OrderByTerm::Case {
+                    field: "kind".to_string(),
+                    mapping: vec![("icp".to_string(), 0), ("rot".to_string(), 1)],
+                },
+                Order::Asc,
+            ),
+            (OrderByTerm::Field("said".to_string()), Order::Asc),
+        ];
+        assert_eq!(
+            build_order_clause(&clauses),
+            " ORDER BY serial ASC, CASE kind WHEN 'icp' THEN 0 WHEN 'rot' THEN 1 ELSE 999 END ASC, said ASC"
+        );
     }
 }
