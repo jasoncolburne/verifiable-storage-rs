@@ -14,6 +14,9 @@ pub enum StorageError {
     #[error("Storage error: {0}")]
     StorageError(String),
 
+    #[error("Duplicate record: {0}")]
+    DuplicateRecord(String),
+
     #[error("Not found: {0}")]
     NotFound(String),
 }

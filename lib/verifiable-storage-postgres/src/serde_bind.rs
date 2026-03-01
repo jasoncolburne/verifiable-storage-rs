@@ -6,7 +6,18 @@
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use sqlx::{Column, Row, postgres::PgRow};
+
 use verifiable_storage::{Storable, StorageError};
+
+/// Map sqlx insert errors, detecting PostgreSQL unique_violation (23505) as DuplicateRecord.
+fn map_sqlx_insert_error(e: sqlx::Error) -> StorageError {
+    if let sqlx::Error::Database(ref db_err) = e
+        && db_err.code().as_deref() == Some("23505")
+    {
+        return StorageError::DuplicateRecord(e.to_string());
+    }
+    StorageError::StorageError(e.to_string())
+}
 
 /// Build INSERT SQL for a table with the given columns.
 fn build_insert_sql(table: &str, columns: &[&str]) -> String {
@@ -67,7 +78,7 @@ pub async fn bind_insert_with_table<T: Storable + Serialize>(
     let result = sqlx::query_with(&sql, args)
         .execute(pool)
         .await
-        .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        .map_err(map_sqlx_insert_error)?;
 
     Ok(result.rows_affected())
 }
@@ -109,7 +120,7 @@ pub async fn bind_insert_with_table_tx<'a, T: Storable + Serialize>(
     let result = sqlx::query_with(&sql, args)
         .execute(&mut **tx)
         .await
-        .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        .map_err(map_sqlx_insert_error)?;
 
     Ok(result.rows_affected())
 }
