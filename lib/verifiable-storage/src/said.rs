@@ -41,14 +41,13 @@ pub trait Chained: SelfAddressed + Clone {
     fn get_created_at(&self) -> Option<StorageDatetime>;
 
     /// Verify the item based on whether it has a previous pointer:
-    /// - no previous: verify_prefix() (said == prefix, inception)
+    /// - no previous: verify_prefix() + verify_said() (inception — both must be valid)
     /// - has previous: verify_said() (said derived from content)
     fn verify(&self) -> Result<(), StorageError> {
         if self.get_previous().is_none() {
-            self.verify_prefix()
-        } else {
-            self.verify_said()
+            self.verify_prefix()?;
         }
+        self.verify_said()
     }
 }
 
