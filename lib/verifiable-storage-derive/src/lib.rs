@@ -504,7 +504,14 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         quote! { pub }
     };
 
+    let too_many_args_allow = if new_params.len() > 7 {
+        quote! { #[allow(clippy::too_many_arguments)] }
+    } else {
+        quote! {}
+    };
+
     let expanded = quote! {
+        #too_many_args_allow
         impl #name {
             /// Create a new instance with storage-managed fields initialized to defaults.
             ///
