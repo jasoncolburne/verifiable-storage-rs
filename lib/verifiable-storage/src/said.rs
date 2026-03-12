@@ -125,7 +125,7 @@ pub fn compute_said_from_value(value: &serde_json::Value) -> Result<String, Stor
 /// Walk a JSON value bottom-up, depth-first. At each object with a `"said"` key,
 /// compact its children first, then compute its SAID, replace it in the parent
 /// with the SAID string, and add the compacted form to the accumulator.
-fn compact_value(
+pub fn compact_value(
     value: &mut serde_json::Value,
     accumulator: &mut HashMap<String, serde_json::Value>,
 ) -> Result<(), StorageError> {
