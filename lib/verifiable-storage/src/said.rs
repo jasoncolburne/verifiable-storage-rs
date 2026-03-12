@@ -1,16 +1,55 @@
+use std::collections::HashMap;
+
 use cesr::Matter;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::{StorageDatetime, StorageError};
+
+const SAID_PLACEHOLDER: &str = "############################################";
 
 /// Trait for types that have a Self-Addressing IDentifier (SAID).
 ///
 /// The SAID is computed from the content hash of the serialized data,
 /// providing content-addressable storage.
-pub trait SelfAddressed: Sized {
+pub trait SelfAddressed: Sized + Serialize + DeserializeOwned {
     fn derive_said(&mut self) -> Result<(), StorageError>;
     fn verify_said(&self) -> Result<(), StorageError>;
     fn get_said(&self) -> String;
+
+    /// Compact this value bottom-up, replacing all nested SelfAddressed objects
+    /// with their SAID strings. Returns a HashMap of extracted chunks keyed by SAID.
+    ///
+    /// After this call, `self` is in most-compact form (one layer of keys/values
+    /// with nested SelfAddressed fields replaced by SAIDs), and `self.get_said()`
+    /// returns the top-level SAID.
+    fn compact(&mut self) -> Result<HashMap<String, serde_json::Value>, StorageError> {
+        let mut value = serde_json::to_value(&*self)?;
+        let mut accumulator = HashMap::new();
+
+        // Compact children of the root (but not the root itself)
+        if let Some(obj) = value.as_object_mut() {
+            let keys: Vec<String> = obj.keys().cloned().collect();
+            for key in &keys {
+                if key == "said" {
+                    continue;
+                }
+                if let Some(child) = obj.get_mut(key) {
+                    compact_value(child, &mut accumulator)?;
+                }
+            }
+        }
+
+        // Deserialize the compacted form back into self, then derive the top-level SAID
+        *self =
+            serde_json::from_value(value).map_err(|e| StorageError::StorageError(e.to_string()))?;
+        self.derive_said()?;
+
+        // Add the compacted self to the accumulator
+        let self_value = serde_json::to_value(&*self)?;
+        accumulator.insert(self.get_said(), self_value);
+        Ok(accumulator)
+    }
 }
 
 /// Trait for chained types with prefix and previous pointer.
@@ -61,4 +100,62 @@ pub fn compute_said<T: Serialize>(data: &T) -> Result<String, StorageError> {
     let digest = cesr::Digest::from_raw(cesr::DigestCode::Blake3, hash.as_bytes().to_vec())?;
 
     Ok(digest.qb64())
+}
+
+/// Compute a SAID from a `serde_json::Value`.
+///
+/// Sets the `"said"` field to a placeholder, serializes, blake3 hashes, CESR encodes.
+pub fn compute_said_from_value(value: &serde_json::Value) -> Result<String, StorageError> {
+    let mut work = value.clone();
+    let obj = work
+        .as_object_mut()
+        .ok_or_else(|| StorageError::StorageError("value must be an object".to_string()))?;
+
+    obj.insert(
+        "said".to_string(),
+        serde_json::Value::String(SAID_PLACEHOLDER.to_string()),
+    );
+
+    let bytes = serde_json::to_vec(&work)?;
+    let hash = blake3::hash(&bytes);
+    let digest = cesr::Digest::from_raw(cesr::DigestCode::Blake3, hash.as_bytes().to_vec())?;
+    Ok(digest.qb64())
+}
+
+/// Walk a JSON value bottom-up, depth-first. At each object with a `"said"` key,
+/// compact its children first, then compute its SAID, replace it in the parent
+/// with the SAID string, and add the compacted form to the accumulator.
+fn compact_value(
+    value: &mut serde_json::Value,
+    accumulator: &mut HashMap<String, serde_json::Value>,
+) -> Result<(), StorageError> {
+    if let Some(obj) = value.as_object_mut() {
+        let keys: Vec<String> = obj.keys().cloned().collect();
+        for key in &keys {
+            if key == "said" {
+                continue;
+            }
+            if let Some(child) = obj.get_mut(key) {
+                compact_value(child, accumulator)?;
+            }
+        }
+
+        // If this object has a "said" field, it's a SelfAddressed chunk
+        if obj.contains_key("said") {
+            let said = compute_said_from_value(value)?;
+            let obj = value
+                .as_object_mut()
+                .ok_or_else(|| StorageError::StorageError("lost object".to_string()))?;
+            obj.insert("said".to_string(), serde_json::Value::String(said.clone()));
+            accumulator.insert(said.clone(), value.clone());
+            // Replace this object with its SAID string in the parent
+            *value = serde_json::Value::String(said);
+        }
+    } else if let Some(arr) = value.as_array_mut() {
+        for elem in arr.iter_mut() {
+            compact_value(elem, accumulator)?;
+        }
+    }
+
+    Ok(())
 }
