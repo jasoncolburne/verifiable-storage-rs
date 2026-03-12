@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use cesr::Matter;
 use serde::Serialize;
-use serde::de::DeserializeOwned;
 
 use crate::{StorageDatetime, StorageError};
 
@@ -12,44 +11,10 @@ const SAID_PLACEHOLDER: &str = "############################################";
 ///
 /// The SAID is computed from the content hash of the serialized data,
 /// providing content-addressable storage.
-pub trait SelfAddressed: Sized + Serialize + DeserializeOwned {
+pub trait SelfAddressed: Sized {
     fn derive_said(&mut self) -> Result<(), StorageError>;
     fn verify_said(&self) -> Result<(), StorageError>;
     fn get_said(&self) -> String;
-
-    /// Compact this value bottom-up, replacing all nested SelfAddressed objects
-    /// with their SAID strings. Returns a HashMap of extracted chunks keyed by SAID.
-    ///
-    /// After this call, `self` is in most-compact form (one layer of keys/values
-    /// with nested SelfAddressed fields replaced by SAIDs), and `self.get_said()`
-    /// returns the top-level SAID.
-    fn compact(&mut self) -> Result<HashMap<String, serde_json::Value>, StorageError> {
-        let mut value = serde_json::to_value(&*self)?;
-        let mut accumulator = HashMap::new();
-
-        // Compact children of the root (but not the root itself)
-        if let Some(obj) = value.as_object_mut() {
-            let keys: Vec<String> = obj.keys().cloned().collect();
-            for key in &keys {
-                if key == "said" {
-                    continue;
-                }
-                if let Some(child) = obj.get_mut(key) {
-                    compact_value(child, &mut accumulator)?;
-                }
-            }
-        }
-
-        // Deserialize the compacted form back into self, then derive the top-level SAID
-        *self =
-            serde_json::from_value(value).map_err(|e| StorageError::StorageError(e.to_string()))?;
-        self.derive_said()?;
-
-        // Add the compacted self to the accumulator
-        let self_value = serde_json::to_value(&*self)?;
-        accumulator.insert(self.get_said(), self_value);
-        Ok(accumulator)
-    }
 }
 
 /// Trait for chained types with prefix and previous pointer.
