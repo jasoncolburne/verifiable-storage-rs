@@ -92,10 +92,7 @@ impl SelfAddressed for serde_json::Value {
         let said = compute_said_from_value(self)?;
         self.as_object_mut()
             .ok_or_else(|| StorageError::StorageError("value must be an object".to_string()))?
-            .insert(
-                "said".to_string(),
-                serde_json::Value::String(said),
-            );
+            .insert("said".to_string(), serde_json::Value::String(said));
         Ok(())
     }
 
