@@ -87,6 +87,38 @@ pub fn compute_said_from_value(value: &serde_json::Value) -> Result<String, Stor
     Ok(digest.qb64())
 }
 
+impl SelfAddressed for serde_json::Value {
+    fn derive_said(&mut self) -> Result<(), StorageError> {
+        let said = compute_said_from_value(self)?;
+        self.as_object_mut()
+            .ok_or_else(|| StorageError::StorageError("value must be an object".to_string()))?
+            .insert("said".to_string(), serde_json::Value::String(said));
+        Ok(())
+    }
+
+    fn verify_said(&self) -> Result<(), StorageError> {
+        let current = self
+            .get("said")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| StorageError::StorageError("missing said field".to_string()))?;
+        let computed = compute_said_from_value(self)?;
+        if current != computed {
+            return Err(StorageError::StorageError(format!(
+                "SAID mismatch: expected {}, got {}",
+                computed, current
+            )));
+        }
+        Ok(())
+    }
+
+    fn get_said(&self) -> String {
+        self.get("said")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    }
+}
+
 /// Maximum default recursion depth for compaction.
 pub const MAX_COMPACTION_DEPTH: usize = 32;
 
