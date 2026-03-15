@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use cesr::Matter;
 use serde::Serialize;
 
@@ -117,64 +115,4 @@ impl SelfAddressed for serde_json::Value {
             .unwrap_or_default()
             .to_string()
     }
-}
-
-/// Maximum default recursion depth for compaction.
-pub const MAX_COMPACTION_DEPTH: usize = 32;
-
-/// Walk a JSON value bottom-up, depth-first. At each object with a `"said"` key,
-/// compact its children first, then compute its SAID, replace it in the parent
-/// with the SAID string, and add the compacted form to the accumulator.
-/// Uses `MAX_COMPACTION_DEPTH` as the default depth bound.
-pub fn compact_value(
-    value: &mut serde_json::Value,
-    accumulator: &mut HashMap<String, serde_json::Value>,
-) -> Result<(), StorageError> {
-    compact_value_bounded(value, accumulator, MAX_COMPACTION_DEPTH)
-}
-
-/// Walk a JSON value bottom-up, depth-first with an explicit depth bound.
-/// At each object with a `"said"` key, compact its children first, then compute
-/// its SAID, replace it in the parent with the SAID string, and add the compacted
-/// form to the accumulator.
-pub fn compact_value_bounded(
-    value: &mut serde_json::Value,
-    accumulator: &mut HashMap<String, serde_json::Value>,
-    remaining_depth: usize,
-) -> Result<(), StorageError> {
-    if remaining_depth == 0 {
-        return Err(StorageError::StorageError(
-            "maximum compaction depth exceeded".to_string(),
-        ));
-    }
-
-    if let Some(obj) = value.as_object_mut() {
-        let keys: Vec<String> = obj.keys().cloned().collect();
-        for key in &keys {
-            if key == "said" {
-                continue;
-            }
-            if let Some(child) = obj.get_mut(key) {
-                compact_value_bounded(child, accumulator, remaining_depth - 1)?;
-            }
-        }
-
-        // If this object has a "said" field, it's a SelfAddressed chunk
-        if obj.contains_key("said") {
-            let said = compute_said_from_value(value)?;
-            let obj = value
-                .as_object_mut()
-                .ok_or_else(|| StorageError::StorageError("lost object".to_string()))?;
-            obj.insert("said".to_string(), serde_json::Value::String(said.clone()));
-            accumulator.insert(said.clone(), value.clone());
-            // Replace this object with its SAID string in the parent
-            *value = serde_json::Value::String(said);
-        }
-    } else if let Some(arr) = value.as_array_mut() {
-        for elem in arr.iter_mut() {
-            compact_value_bounded(elem, accumulator, remaining_depth - 1)?;
-        }
-    }
-
-    Ok(())
 }

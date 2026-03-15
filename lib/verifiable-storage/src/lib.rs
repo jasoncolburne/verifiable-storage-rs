@@ -37,10 +37,7 @@ pub use query::{
 pub use repository::{
     ChainedRepository, ConnectionConfig, RepositoryConnection, UnchainedRepository,
 };
-pub use said::{
-    Chained, MAX_COMPACTION_DEPTH, SelfAddressed, compact_value, compact_value_bounded,
-    compute_said, compute_said_from_value,
-};
+pub use said::{Chained, SelfAddressed, compute_said, compute_said_from_value};
 pub use storable::Storable;
 pub use time::StorageDatetime;
 
