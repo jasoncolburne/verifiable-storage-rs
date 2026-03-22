@@ -308,6 +308,11 @@ impl<T: Storable> Query<T> {
         self.filter(Filter::Eq(field.into(), value.into()))
     }
 
+    /// Add a not-equal filter (shorthand for Filter::Ne).
+    pub fn ne(self, field: impl Into<String>, value: impl Into<Value>) -> Self {
+        self.filter(Filter::Ne(field.into(), value.into()))
+    }
+
     /// Add an IN filter (shorthand for Filter::In).
     pub fn r#in(self, field: impl Into<String>, values: impl Into<Value>) -> Self {
         self.filter(Filter::In(field.into(), values.into()))
