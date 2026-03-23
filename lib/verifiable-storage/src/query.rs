@@ -338,6 +338,11 @@ impl<T: Storable> Query<T> {
         self.filter(Filter::Lte(field.into(), value.into()))
     }
 
+    /// Add a NOT EXISTS correlated subquery filter.
+    pub fn not_exists(self, subquery: CorrelatedSubquery) -> Self {
+        self.filter(Filter::NotExists(subquery))
+    }
+
     /// Add a >= scalar subquery filter.
     ///
     /// Generates: `field >= (SELECT select_field FROM table WHERE ... LIMIT 1)`
