@@ -307,6 +307,15 @@ fn generate_individual_repository(
                     Ok(item)
                 }
 
+                async fn insert_in<Tx: verifiable_storage::TransactionExecutor>(
+                    &self,
+                    tx: &mut Tx,
+                    item: #item_type,
+                ) -> Result<#item_type, verifiable_storage::StorageError> {
+                    tx.insert_with_table(&item, Self::TABLE_NAME).await?;
+                    Ok(item)
+                }
+
                 async fn get_by_said(
                     &self,
                     said: &str,
@@ -379,6 +388,15 @@ fn generate_individual_repository(
                     Ok(item)
                 }
 
+                async fn insert_in<Tx: verifiable_storage::TransactionExecutor>(
+                    &self,
+                    tx: &mut Tx,
+                    item: #item_type,
+                ) -> Result<#item_type, verifiable_storage::StorageError> {
+                    tx.insert_with_table(&item, Self::TABLE_NAME).await?;
+                    Ok(item)
+                }
+
                 async fn get_by_said(
                     &self,
                     said: &str,
@@ -388,6 +406,18 @@ fn generate_individual_repository(
                         .eq(#id_field, said)
                         .limit(1);
                     self.pool.fetch_optional(query).await
+                }
+
+                async fn exists(
+                    &self,
+                    said: &str,
+                ) -> Result<bool, verifiable_storage::StorageError> {
+                    use verifiable_storage_postgres::QueryExecutor;
+                    let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
+                        .eq(#id_field, said)
+                        .limit(1);
+                    let result = self.pool.fetch_optional(query).await?;
+                    Ok(result.is_some())
                 }
             }
         }

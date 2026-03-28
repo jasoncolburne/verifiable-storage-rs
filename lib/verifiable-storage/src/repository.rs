@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{Chained, SelfAddressed, StorageError};
+use crate::{Chained, SelfAddressed, StorageError, TransactionExecutor};
 
 /// Connection configuration for database backends.
 ///
@@ -89,13 +89,24 @@ where
     /// 3. Return the item with its updated identifiers
     async fn update(&self, item: T) -> Result<T, StorageError>;
 
-    /// Insert an item with pre-computed identifiers.
+    /// Insert an item with pre-computed identifiers (auto-commits).
     ///
     /// This method inserts the item as-is without calling `derive_prefix()` or `increment()`.
     /// Use this when the SAID and other identifiers have already been computed and verified.
     ///
     /// The caller is responsible for ensuring the SAID is valid.
     async fn insert(&self, item: T) -> Result<T, StorageError>;
+
+    /// Insert an item within an existing transaction (does not commit).
+    ///
+    /// Same as `insert()` but uses the provided transaction. The caller is
+    /// responsible for committing or rolling back. The table name used is
+    /// the same as the repository's configured table.
+    async fn insert_in<Tx: TransactionExecutor>(
+        &self,
+        tx: &mut Tx,
+        item: T,
+    ) -> Result<T, StorageError>;
 
     /// Get an item by its SAID (Self-Addressing Identifier).
     ///
@@ -151,7 +162,7 @@ pub trait UnchainedRepository<T>
 where
     T: SelfAddressed + Serialize + DeserializeOwned + Clone + Send + Sync,
 {
-    /// Create an item with a computed SAID.
+    /// Create an item with a computed SAID (auto-commits).
     ///
     /// This method should:
     /// 1. Call `derive_said()` on the item to compute its SAID
@@ -159,10 +170,25 @@ where
     /// 3. Return the item with its computed identifier
     async fn create(&self, item: T) -> Result<T, StorageError>;
 
+    /// Insert an item with pre-computed SAID (auto-commits).
     async fn insert(&self, item: T) -> Result<T, StorageError>;
+
+    /// Insert an item within an existing transaction (does not commit).
+    ///
+    /// Same as `insert()` but uses the provided transaction. The caller is
+    /// responsible for committing or rolling back. The table name used is
+    /// the same as the repository's configured table.
+    async fn insert_in<Tx: TransactionExecutor>(
+        &self,
+        tx: &mut Tx,
+        item: T,
+    ) -> Result<T, StorageError>;
 
     /// Get an item by its SAID (Self-Addressing Identifier).
     ///
     /// Returns `None` if no item with the given SAID exists.
     async fn get_by_said(&self, said: &str) -> Result<Option<T>, StorageError>;
+
+    /// Check if an item with the given SAID exists.
+    async fn exists(&self, said: &str) -> Result<bool, StorageError>;
 }

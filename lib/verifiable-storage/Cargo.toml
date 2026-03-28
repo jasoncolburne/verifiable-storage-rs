@@ -15,7 +15,7 @@ surrealdb = ["dep:surrealdb"]
 verifiable-storage-derive = { path = "../verifiable-storage-derive" }
 
 # CESR for cryptographic primitives
-cesr = { git = "https://github.com/jasoncolburne/cesr-rs", default-features = false }
+cesr = { git = "https://github.com/jasoncolburne/cesr-rs", features = ["native"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
