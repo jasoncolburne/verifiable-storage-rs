@@ -611,6 +611,12 @@ pub trait TransactionExecutor: Send + Sync {
         table: &str,
     ) -> Result<u64, StorageError>;
 
+    /// Execute a grouped COUNT query within the transaction.
+    ///
+    /// Generates `SELECT COUNT(column) FROM table WHERE ... GROUP BY ... ORDER BY COUNT(column) DESC LIMIT ...`.
+    /// Returns the counts as a `Vec<i64>`, ordered by count descending.
+    async fn fetch_grouped_count(&mut self, query: ColumnQuery) -> Result<Vec<i64>, StorageError>;
+
     /// Acquire an advisory lock scoped to this transaction.
     /// The lock is automatically released on commit/rollback.
     /// Used to serialize operations on a logical key (e.g., a prefix).
