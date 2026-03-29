@@ -428,6 +428,8 @@ pub struct ColumnQuery {
     pub limit: Option<u64>,
     /// GROUP BY columns.
     pub group_by: Vec<String>,
+    /// HAVING COUNT(*) > N threshold. Only applies when `group_by` is non-empty.
+    pub having_count_gt: Option<i64>,
 }
 
 impl ColumnQuery {
@@ -441,6 +443,7 @@ impl ColumnQuery {
             order: None,
             limit: None,
             group_by: Vec::new(),
+            having_count_gt: None,
         }
     }
 
@@ -477,6 +480,12 @@ impl ColumnQuery {
     /// Add a GROUP BY column.
     pub fn group_by(mut self, column: impl Into<String>) -> Self {
         self.group_by.push(column.into());
+        self
+    }
+
+    /// Add a HAVING COUNT(*) > N clause. Requires `group_by` to be set.
+    pub fn having_count_gt(mut self, threshold: i64) -> Self {
+        self.having_count_gt = Some(threshold);
         self
     }
 }

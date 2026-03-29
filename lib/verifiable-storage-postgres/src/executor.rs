@@ -47,22 +47,7 @@ impl PgPool {
     {
         use sqlx::Row;
 
-        let distinct = if query.distinct { "DISTINCT " } else { "" };
-        let (where_clause, _) = build_where_clause(&query.filters, 1);
-        let order_clause = match query.order {
-            Some(Order::Asc) => format!(" ORDER BY {} ASC", query.column),
-            Some(Order::Desc) => format!(" ORDER BY {} DESC", query.column),
-            None => String::new(),
-        };
-        let limit_clause = query
-            .limit
-            .map(|l| format!(" LIMIT {}", l))
-            .unwrap_or_default();
-
-        let sql = format!(
-            "SELECT {}{} FROM {}{}{}{}",
-            distinct, query.column, query.table, where_clause, order_clause, limit_clause
-        );
+        let sql = build_column_query_sql(&query);
 
         let mut args = PgArguments::default();
         bind_filters(&mut args, &query.filters)?;
@@ -82,26 +67,12 @@ impl PgPool {
 
     /// Execute a grouped COUNT query.
     ///
-    /// Generates `SELECT COUNT(column) FROM table WHERE ... GROUP BY ... ORDER BY COUNT(column) DESC LIMIT ...`.
+    /// Generates `SELECT COUNT(column) FROM table WHERE ... GROUP BY ... HAVING ... ORDER BY COUNT(column) DESC LIMIT ...`.
     /// Returns the counts as a `Vec<i64>`, ordered by count descending.
     pub async fn fetch_grouped_count(&self, query: ColumnQuery) -> Result<Vec<i64>, StorageError> {
         use sqlx::Row;
 
-        let (where_clause, _) = build_where_clause(&query.filters, 1);
-        let group_clause = if query.group_by.is_empty() {
-            String::new()
-        } else {
-            format!(" GROUP BY {}", query.group_by.join(", "))
-        };
-        let limit_clause = query
-            .limit
-            .map(|l| format!(" LIMIT {}", l))
-            .unwrap_or_default();
-
-        let sql = format!(
-            "SELECT COUNT({}) FROM {}{}{} ORDER BY COUNT({}) DESC{}",
-            query.column, query.table, where_clause, group_clause, query.column, limit_clause
-        );
+        let sql = build_grouped_count_sql(&query);
 
         let mut args = PgArguments::default();
         bind_filters(&mut args, &query.filters)?;
@@ -333,6 +304,73 @@ fn build_join_clause(main_table: &str, joins: &[Join]) -> String {
         .join("")
 }
 
+/// Build SQL for a `fetch_column` query.
+fn build_column_query_sql(query: &ColumnQuery) -> String {
+    let distinct = if query.distinct { "DISTINCT " } else { "" };
+    let (where_clause, _) = build_where_clause(&query.filters, 1);
+    let group_clause = if query.group_by.is_empty() {
+        String::new()
+    } else {
+        format!(" GROUP BY {}", query.group_by.join(", "))
+    };
+    let having_clause = if let Some(threshold) = query.having_count_gt {
+        format!(" HAVING COUNT(*) > {}", threshold)
+    } else {
+        String::new()
+    };
+    let order_clause = match query.order {
+        Some(Order::Asc) => format!(" ORDER BY {} ASC", query.column),
+        Some(Order::Desc) => format!(" ORDER BY {} DESC", query.column),
+        None => String::new(),
+    };
+    let limit_clause = query
+        .limit
+        .map(|l| format!(" LIMIT {}", l))
+        .unwrap_or_default();
+
+    format!(
+        "SELECT {}{} FROM {}{}{}{}{}{}",
+        distinct,
+        query.column,
+        query.table,
+        where_clause,
+        group_clause,
+        having_clause,
+        order_clause,
+        limit_clause
+    )
+}
+
+/// Build SQL for a `fetch_grouped_count` query.
+fn build_grouped_count_sql(query: &ColumnQuery) -> String {
+    let (where_clause, _) = build_where_clause(&query.filters, 1);
+    let group_clause = if query.group_by.is_empty() {
+        String::new()
+    } else {
+        format!(" GROUP BY {}", query.group_by.join(", "))
+    };
+    let having_clause = if let Some(threshold) = query.having_count_gt {
+        format!(" HAVING COUNT({}) > {}", query.column, threshold)
+    } else {
+        String::new()
+    };
+    let limit_clause = query
+        .limit
+        .map(|l| format!(" LIMIT {}", l))
+        .unwrap_or_default();
+
+    format!(
+        "SELECT COUNT({}) FROM {}{}{}{} ORDER BY COUNT({}) DESC{}",
+        query.column,
+        query.table,
+        where_clause,
+        group_clause,
+        having_clause,
+        query.column,
+        limit_clause
+    )
+}
+
 #[async_trait]
 impl QueryExecutor for PgPool {
     type Transaction = PgTransaction;
@@ -535,21 +573,7 @@ impl TransactionExecutor for PgTransaction {
     async fn fetch_grouped_count(&mut self, query: ColumnQuery) -> Result<Vec<i64>, StorageError> {
         use sqlx::Row;
 
-        let (where_clause, _) = build_where_clause(&query.filters, 1);
-        let group_clause = if query.group_by.is_empty() {
-            String::new()
-        } else {
-            format!(" GROUP BY {}", query.group_by.join(", "))
-        };
-        let limit_clause = query
-            .limit
-            .map(|l| format!(" LIMIT {}", l))
-            .unwrap_or_default();
-
-        let sql = format!(
-            "SELECT COUNT({}) FROM {}{}{} ORDER BY COUNT({}) DESC{}",
-            query.column, query.table, where_clause, group_clause, query.column, limit_clause
-        );
+        let sql = build_grouped_count_sql(&query);
 
         let mut args = PgArguments::default();
         bind_filters(&mut args, &query.filters)?;
