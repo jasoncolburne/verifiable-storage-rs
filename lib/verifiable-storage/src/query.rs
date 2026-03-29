@@ -477,6 +477,11 @@ impl ColumnQuery {
         self
     }
 
+    /// Add an IN filter.
+    pub fn r#in(self, field: impl Into<String>, values: impl Into<Value>) -> Self {
+        self.filter(Filter::In(field.into(), values.into()))
+    }
+
     /// Add a GROUP BY column.
     pub fn group_by(mut self, column: impl Into<String>) -> Self {
         self.group_by.push(column.into());
