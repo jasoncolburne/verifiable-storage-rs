@@ -155,6 +155,14 @@ fn build_where_clause(filters: &[Filter], start_param: usize) -> (String, usize)
                     field, subquery.select_field, subquery.table, sub_where
                 )
             }
+            Filter::InSubquery(field, subquery) => {
+                let (sub_where, sub_count) = build_where_clause(&subquery.filters, param_idx);
+                param_idx += sub_count;
+                format!(
+                    "{} IN (SELECT {} FROM {}{})",
+                    field, subquery.select_field, subquery.table, sub_where
+                )
+            }
             Filter::NotExists(sub) => {
                 let mut conditions: Vec<String> = sub
                     .correlations
@@ -202,7 +210,7 @@ fn bind_filters(args: &mut PgArguments, filters: &[Filter]) -> Result<(), Storag
             Filter::IsNull(_) | Filter::IsNotNull(_) => {
                 // No binding needed
             }
-            Filter::GteScalarSubquery(_, subquery) => {
+            Filter::GteScalarSubquery(_, subquery) | Filter::InSubquery(_, subquery) => {
                 bind_filters(args, &subquery.filters)?;
             }
             Filter::NotExists(sub) => {
