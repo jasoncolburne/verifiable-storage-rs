@@ -194,6 +194,8 @@ pub enum Filter {
     IsNotNull(String),
     /// field >= (SELECT select_field FROM table WHERE ... LIMIT 1)
     GteScalarSubquery(String, ScalarSubquery),
+    /// field IN (SELECT select_field FROM table WHERE filters)
+    InSubquery(String, ScalarSubquery),
     /// NOT EXISTS (SELECT 1 FROM table alias WHERE correlations AND filters)
     NotExists(CorrelatedSubquery),
 }
@@ -480,6 +482,11 @@ impl ColumnQuery {
     /// Add an IN filter.
     pub fn r#in(self, field: impl Into<String>, values: impl Into<Value>) -> Self {
         self.filter(Filter::In(field.into(), values.into()))
+    }
+
+    /// Add an IN (SELECT ...) subquery filter.
+    pub fn in_subquery(self, field: impl Into<String>, subquery: ScalarSubquery) -> Self {
+        self.filter(Filter::InSubquery(field.into(), subquery))
     }
 
     /// Add a GROUP BY column.
