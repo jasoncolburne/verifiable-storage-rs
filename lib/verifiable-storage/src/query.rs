@@ -587,6 +587,9 @@ pub trait QueryExecutor: Send + Sync {
     /// Check if any rows match the query (SELECT EXISTS).
     async fn exists<T: Storable + Send>(&self, query: Query<T>) -> Result<bool, StorageError>;
 
+    /// Count rows matching the query (SELECT COUNT(*)).
+    async fn count<T: Storable + Send>(&self, query: Query<T>) -> Result<u64, StorageError>;
+
     /// Execute a DELETE query and return the number of rows affected.
     async fn delete<T: Storable + Send>(&self, delete: Delete<T>) -> Result<u64, StorageError>;
 
