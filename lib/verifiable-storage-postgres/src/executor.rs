@@ -353,7 +353,7 @@ fn build_column_query_sql(query: &ColumnQuery) -> String {
 fn build_sum_sql(query: &ColumnQuery) -> String {
     let (where_clause, _) = build_where_clause(&query.filters, 1);
     format!(
-        "SELECT COALESCE(SUM({}), 0) FROM {}{}",
+        "SELECT COALESCE(SUM({})::BIGINT, 0) FROM {}{}",
         query.column, query.table, where_clause
     )
 }
