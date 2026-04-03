@@ -590,6 +590,9 @@ pub trait QueryExecutor: Send + Sync {
     /// Count rows matching the query (SELECT COUNT(*)).
     async fn count<T: Storable + Send>(&self, query: Query<T>) -> Result<u64, StorageError>;
 
+    /// Sum a column's values for rows matching the query (SELECT COALESCE(SUM(column), 0)).
+    async fn sum(&self, query: ColumnQuery) -> Result<i64, StorageError>;
+
     /// Execute a DELETE query and return the number of rows affected.
     async fn delete<T: Storable + Send>(&self, delete: Delete<T>) -> Result<u64, StorageError>;
 
