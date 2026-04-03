@@ -349,6 +349,15 @@ fn build_column_query_sql(query: &ColumnQuery) -> String {
     )
 }
 
+/// Build SQL for a `sum` query.
+fn build_sum_sql(query: &ColumnQuery) -> String {
+    let (where_clause, _) = build_where_clause(&query.filters, 1);
+    format!(
+        "SELECT COALESCE(SUM({}), 0) FROM {}{}",
+        query.column, query.table, where_clause
+    )
+}
+
 /// Build SQL for a `fetch_grouped_count` query.
 fn build_grouped_count_sql(query: &ColumnQuery) -> String {
     let (where_clause, _) = build_where_clause(&query.filters, 1);
@@ -473,6 +482,21 @@ impl QueryExecutor for PgPool {
         use sqlx::Row;
         let count: i64 = row.get(0);
         Ok(count as u64)
+    }
+
+    async fn sum(&self, query: ColumnQuery) -> Result<i64, StorageError> {
+        let sql = build_sum_sql(&query);
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let row = sqlx::query_with(&sql, args)
+            .fetch_one(&self.0)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        use sqlx::Row;
+        Ok(row.get(0))
     }
 
     async fn delete<T: Storable + Send>(&self, delete: Delete<T>) -> Result<u64, StorageError> {
