@@ -461,6 +461,11 @@ impl ColumnQuery {
         self
     }
 
+    /// Add an equality filter.
+    pub fn eq(self, field: impl Into<String>, value: impl Into<Value>) -> Self {
+        self.filter(Filter::Eq(field.into(), value.into()))
+    }
+
     /// Add a greater-than filter on the column (for cursor-based pagination).
     pub fn gt(self, value: impl Into<Value>) -> Self {
         let column = self.column.clone();
