@@ -458,6 +458,23 @@ impl QueryExecutor for PgPool {
         Ok(row.get::<bool, _>(0))
     }
 
+    async fn count<T: Storable + Send>(&self, query: Query<T>) -> Result<u64, StorageError> {
+        let (where_clause, _) = build_where_clause(&query.filters, 1);
+        let sql = format!("SELECT COUNT(*) FROM {}{}", query.table, where_clause);
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let row = sqlx::query_with(&sql, args)
+            .fetch_one(&self.0)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        use sqlx::Row;
+        let count: i64 = row.get(0);
+        Ok(count as u64)
+    }
+
     async fn delete<T: Storable + Send>(&self, delete: Delete<T>) -> Result<u64, StorageError> {
         let (where_clause, _) = build_where_clause(&delete.filters, 1);
         let sql = format!("DELETE FROM {}{}", delete.table, where_clause);
