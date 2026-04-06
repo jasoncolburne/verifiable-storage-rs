@@ -16,7 +16,7 @@
 //! #[serde(rename_all = "camelCase")]
 //! pub struct MyType {
 //!     #[said]
-//!     pub said: String,
+//!     pub said: cesr::Digest,
 //!     pub name: String,
 //! }
 //! ```
