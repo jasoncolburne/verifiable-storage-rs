@@ -159,8 +159,8 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
 /// ## Storage-managed fields
 ///
 /// These fields are excluded from `new()` parameters and auto-initialized:
-/// - `#[said]` - empty string (computed by `derive_said()` or `derive_prefix()`)
-/// - `#[prefix]` - empty string (computed by `derive_prefix()`)
+/// - `#[said]` - default Digest (computed by `derive_said()` or `derive_prefix()`)
+/// - `#[prefix]` - default Digest (computed by `derive_prefix()`)
 /// - `#[previous]` - None
 /// - `#[version]` (optional) - 0
 /// - `#[created_at]` - current timestamp
@@ -171,7 +171,7 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
 /// #[derive(SelfAddressed)]
 /// struct AuditRecord {
 ///     #[said]
-///     pub said: String,
+///     pub said: cesr::Digest,
 ///     #[created_at]
 ///     pub recorded_at: StorageDatetime,
 ///     pub data: String,
@@ -185,11 +185,11 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
 /// #[derive(SelfAddressed)]
 /// struct Domain {
 ///     #[said]
-///     pub said: String,
+///     pub said: cesr::Digest,
 ///     #[prefix]
-///     pub prefix: String,
+///     pub prefix: cesr::Digest,
 ///     #[previous]
-///     pub previous: Option<String>,
+///     pub previous: Option<cesr::Digest>,
 ///     #[version]  // optional
 ///     pub version: u64,
 ///     #[created_at]
@@ -220,6 +220,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         .find(|f| has_attr(f, "said"))
         .expect("No field marked with #[said] attribute found");
     let said_field_name = said_field.ident.as_ref().unwrap();
+    let said_json_key = to_camel_case(&said_field_name.to_string());
 
     // Check for chained fields (prefix + previous makes it chained)
     let prefix_field = fields.iter().find(|f| has_attr(f, "prefix"));
@@ -238,7 +239,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         let field_ty = &field.ty;
 
         if has_attr(field, "said") || has_attr(field, "prefix") {
-            new_field_inits.push(quote! { #field_name: String::new() });
+            new_field_inits.push(quote! { #field_name: Default::default() });
         } else if has_attr(field, "previous") {
             new_field_inits.push(quote! { #field_name: None });
         } else if has_attr(field, "version") {
@@ -275,6 +276,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
     // Generate Chained impl if applicable
     let chained_impl = if is_chained {
         let prefix_field_name = prefix_field.unwrap().ident.as_ref().unwrap();
+        let prefix_json_key = to_camel_case(&prefix_field_name.to_string());
         let previous_field_name = previous_field.unwrap().ident.as_ref().unwrap();
 
         let created_at_get = if let Some(field) = created_at_field {
@@ -310,21 +312,12 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
         quote! {
             impl verifiable_storage::Chained for #name {
                 fn derive_prefix(&mut self) -> Result<(), verifiable_storage::StorageError> {
-                    // Set both said and prefix to placeholders
-                    self.#said_field_name = "#".repeat(44);
-                    self.#prefix_field_name = "#".repeat(44);
-                    // Compute SAID and use as prefix
-                    self.#prefix_field_name = verifiable_storage::compute_said(self)?;
+                    self.#prefix_field_name = verifiable_storage::compute_said_for_fields(self, &[#said_json_key, #prefix_json_key])?;
                     Ok(())
                 }
 
                 fn verify_prefix(&self) -> Result<(), verifiable_storage::StorageError> {
-                    let mut copy = self.clone();
-                    // Set both to placeholders
-                    copy.#said_field_name = "#".repeat(44);
-                    copy.#prefix_field_name = "#".repeat(44);
-                    // Compute and compare
-                    let prefix = verifiable_storage::compute_said(&copy)?;
+                    let prefix = verifiable_storage::compute_said_for_fields(self, &[#said_json_key, #prefix_json_key])?;
                     if prefix != self.#prefix_field_name {
                         return Err(verifiable_storage::StorageError::InvalidSaid(format!(
                             "Prefix verification failed: expected {}, got {}",
@@ -334,7 +327,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     Ok(())
                 }
 
-                fn get_prefix(&self) -> String {
+                fn get_prefix(&self) -> cesr::Digest {
                     self.#prefix_field_name.clone()
                 }
 
@@ -366,7 +359,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     #created_at_set
                 }
 
-                fn get_previous(&self) -> Option<String> {
+                fn get_previous(&self) -> Option<cesr::Digest> {
                     self.#previous_field_name.clone()
                 }
             }
@@ -483,7 +476,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     #column_count
                 }
 
-                fn id(&self) -> &str {
+                fn id(&self) -> &cesr::Digest {
                     &self.#said_field_name
                 }
 
@@ -516,8 +509,8 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
             /// Create a new instance with storage-managed fields initialized to defaults.
             ///
             /// Storage-managed fields are automatically set:
-            /// - `said`: empty string (compute with `derive_said()` or `derive_prefix()`)
-            /// - `prefix`: empty string (compute with `derive_prefix()` for versioned types)
+            /// - `said`: default Digest (compute with `derive_said()` or `derive_prefix()`)
+            /// - `prefix`: default Digest (compute with `derive_prefix()` for versioned types)
             /// - `previous`: None
             /// - `version`: 0
             /// - `created_at`: current timestamp
@@ -542,24 +535,22 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
 
         impl verifiable_storage::SelfAddressed for #name {
             fn derive_said(&mut self) -> Result<(), verifiable_storage::StorageError> {
-                self.#said_field_name = "#".repeat(44);
-                self.#said_field_name = verifiable_storage::compute_said(self)?;
+                self.#said_field_name = verifiable_storage::compute_said_for_fields(self, &[#said_json_key])?;
                 Ok(())
             }
 
             fn verify_said(&self) -> Result<(), verifiable_storage::StorageError> {
-                let mut copy = self.clone();
-                copy.derive_said()?;
-                if copy.#said_field_name != self.#said_field_name {
+                let computed = verifiable_storage::compute_said_for_fields(self, &[#said_json_key])?;
+                if computed != self.#said_field_name {
                     return Err(verifiable_storage::StorageError::InvalidSaid(format!(
                         "SAID verification failed: expected {}, got {}",
-                        self.#said_field_name, copy.#said_field_name
+                        self.#said_field_name, computed
                     )));
                 }
                 Ok(())
             }
 
-            fn get_said(&self) -> String {
+            fn get_said(&self) -> cesr::Digest {
                 self.#said_field_name.clone()
             }
         }

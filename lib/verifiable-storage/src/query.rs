@@ -99,6 +99,13 @@ impl From<&StorageDatetime> for Value {
     }
 }
 
+impl From<&cesr::Digest> for Value {
+    fn from(d: &cesr::Digest) -> Self {
+        use cesr::Matter;
+        Value::String(d.qb64())
+    }
+}
+
 /// A scalar subquery that resolves to a single value.
 ///
 /// Generates SQL like: `(SELECT select_field FROM table WHERE ... LIMIT 1)`
@@ -757,7 +764,7 @@ mod tests {
 
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         struct TestItem {
-            said: String,
+            said: cesr::Digest,
         }
 
         impl Storable for TestItem {
@@ -782,7 +789,7 @@ mod tests {
             fn select_by_id_sql() -> &'static str {
                 "SELECT * FROM test_items WHERE said = $1"
             }
-            fn id(&self) -> &str {
+            fn id(&self) -> &cesr::Digest {
                 &self.said
             }
             fn is_chained() -> bool {
@@ -821,7 +828,7 @@ mod tests {
 
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         struct TestItem {
-            said: String,
+            said: cesr::Digest,
         }
 
         impl Storable for TestItem {
@@ -846,7 +853,7 @@ mod tests {
             fn select_by_id_sql() -> &'static str {
                 "SELECT * FROM test_items WHERE said = $1"
             }
-            fn id(&self) -> &str {
+            fn id(&self) -> &cesr::Digest {
                 &self.said
             }
             fn is_chained() -> bool {
