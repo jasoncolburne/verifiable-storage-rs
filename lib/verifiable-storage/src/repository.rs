@@ -41,7 +41,7 @@ impl From<&String> for ConnectionConfig {
 /// Trait for database connection and initialization.
 ///
 /// This trait abstracts the database connection lifecycle, allowing
-/// different backends (PostgreSQL, SurrealDB, etc.) to implement
+/// different backends (PostgreSQL, etc.) to implement
 /// their own connection and migration logic.
 #[async_trait]
 pub trait RepositoryConnection: Sized + Send + Sync {
@@ -111,22 +111,22 @@ where
     /// Get an item by its SAID (Self-Addressing Identifier).
     ///
     /// Returns `None` if no item with the given SAID exists.
-    async fn get_by_said(&self, said: &cesr::Digest) -> Result<Option<T>, StorageError>;
+    async fn get_by_said(&self, said: &cesr::Digest256) -> Result<Option<T>, StorageError>;
 
     /// Get the latest version for a prefix.
     ///
     /// Returns `None` if no items exist for the given prefix.
-    async fn get_latest(&self, prefix: &cesr::Digest) -> Result<Option<T>, StorageError>;
+    async fn get_latest(&self, prefix: &cesr::Digest256) -> Result<Option<T>, StorageError>;
 
     /// Get full history for a prefix (ordered by version ascending).
     ///
     /// Returns an empty vector if no items exist for the given prefix.
-    async fn get_history(&self, prefix: &cesr::Digest) -> Result<Vec<T>, StorageError>;
+    async fn get_history(&self, prefix: &cesr::Digest256) -> Result<Vec<T>, StorageError>;
 
     /// Check if any items exist for a prefix.
     ///
     /// Returns `true` if at least one item exists for the given prefix.
-    async fn exists(&self, prefix: &cesr::Digest) -> Result<bool, StorageError>;
+    async fn exists(&self, prefix: &cesr::Digest256) -> Result<bool, StorageError>;
 
     /// Get history for a prefix starting from a given version serial (inclusive).
     ///
@@ -135,7 +135,7 @@ where
     /// will override this with a generated implementation.
     async fn get_history_since(
         &self,
-        prefix: &cesr::Digest,
+        prefix: &cesr::Digest256,
         since_serial: u64,
     ) -> Result<Vec<T>, StorageError> {
         let _ = (prefix, since_serial);
@@ -187,8 +187,8 @@ where
     /// Get an item by its SAID (Self-Addressing Identifier).
     ///
     /// Returns `None` if no item with the given SAID exists.
-    async fn get_by_said(&self, said: &cesr::Digest) -> Result<Option<T>, StorageError>;
+    async fn get_by_said(&self, said: &cesr::Digest256) -> Result<Option<T>, StorageError>;
 
     /// Check if an item with the given SAID exists.
-    async fn exists(&self, said: &cesr::Digest) -> Result<bool, StorageError>;
+    async fn exists(&self, said: &cesr::Digest256) -> Result<bool, StorageError>;
 }

@@ -247,7 +247,7 @@ fn generate_individual_repository(
         quote! {
             async fn get_history_since(
                 &self,
-                prefix: &cesr::Digest,
+                prefix: &cesr::Digest256,
                 since_serial: u64,
             ) -> Result<Vec<#item_type>, verifiable_storage::StorageError> {
                 use verifiable_storage_postgres::QueryExecutor;
@@ -318,7 +318,7 @@ fn generate_individual_repository(
 
                 async fn get_by_said(
                     &self,
-                    said: &cesr::Digest,
+                    said: &cesr::Digest256,
                 ) -> Result<Option<#item_type>, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
@@ -329,7 +329,7 @@ fn generate_individual_repository(
 
                 async fn get_latest(
                     &self,
-                    prefix: &cesr::Digest,
+                    prefix: &cesr::Digest256,
                 ) -> Result<Option<#item_type>, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
@@ -341,7 +341,7 @@ fn generate_individual_repository(
 
                 async fn get_history(
                     &self,
-                    prefix: &cesr::Digest,
+                    prefix: &cesr::Digest256,
                 ) -> Result<Vec<#item_type>, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
@@ -354,7 +354,7 @@ fn generate_individual_repository(
 
                 async fn exists(
                     &self,
-                    prefix: &cesr::Digest,
+                    prefix: &cesr::Digest256,
                 ) -> Result<bool, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
@@ -399,7 +399,7 @@ fn generate_individual_repository(
 
                 async fn get_by_said(
                     &self,
-                    said: &cesr::Digest,
+                    said: &cesr::Digest256,
                 ) -> Result<Option<#item_type>, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)
@@ -410,7 +410,7 @@ fn generate_individual_repository(
 
                 async fn exists(
                     &self,
-                    said: &cesr::Digest,
+                    said: &cesr::Digest256,
                 ) -> Result<bool, verifiable_storage::StorageError> {
                     use verifiable_storage_postgres::QueryExecutor;
                     let query = verifiable_storage_postgres::Query::<#item_type>::for_table(Self::TABLE_NAME)

@@ -1,7 +1,7 @@
 //! Database-agnostic query builder for verifiable storage.
 //!
 //! This module provides a query abstraction that can be translated to
-//! different database backends (PostgreSQL, SurrealDB, etc.).
+//! different database backends (PostgreSQL, etc.).
 
 use crate::{Storable, StorageDatetime, StorageError};
 use async_trait::async_trait;
@@ -99,8 +99,8 @@ impl From<&StorageDatetime> for Value {
     }
 }
 
-impl From<&cesr::Digest> for Value {
-    fn from(d: &cesr::Digest) -> Self {
+impl From<&cesr::Digest256> for Value {
+    fn from(d: &cesr::Digest256) -> Self {
         use cesr::Matter;
         Value::String(d.qb64())
     }
@@ -254,7 +254,7 @@ pub struct Query<T> {
     pub limit: Option<u64>,
     /// Offset for pagination.
     pub offset: Option<u64>,
-    /// DISTINCT ON fields (PostgreSQL) / GROUP BY fields (SurrealDB).
+    /// DISTINCT ON fields (PostgreSQL).
     /// Returns one row per unique combination of these fields.
     pub distinct_on: Vec<String>,
     pub(crate) _marker: PhantomData<T>,
@@ -401,7 +401,7 @@ impl<T: Storable> Query<T> {
         self
     }
 
-    /// Add a DISTINCT ON field (PostgreSQL) / GROUP BY field (SurrealDB).
+    /// Add a DISTINCT ON field (PostgreSQL).
     ///
     /// Returns one row per unique combination of distinct_on fields.
     /// ORDER BY should start with these fields for deterministic results.
@@ -764,7 +764,7 @@ mod tests {
 
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         struct TestItem {
-            said: cesr::Digest,
+            said: cesr::Digest256,
         }
 
         impl Storable for TestItem {
@@ -789,7 +789,7 @@ mod tests {
             fn select_by_id_sql() -> &'static str {
                 "SELECT * FROM test_items WHERE said = $1"
             }
-            fn id(&self) -> &cesr::Digest {
+            fn id(&self) -> &cesr::Digest256 {
                 &self.said
             }
             fn is_chained() -> bool {
@@ -828,7 +828,7 @@ mod tests {
 
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
         struct TestItem {
-            said: cesr::Digest,
+            said: cesr::Digest256,
         }
 
         impl Storable for TestItem {
@@ -853,7 +853,7 @@ mod tests {
             fn select_by_id_sql() -> &'static str {
                 "SELECT * FROM test_items WHERE said = $1"
             }
-            fn id(&self) -> &cesr::Digest {
+            fn id(&self) -> &cesr::Digest256 {
                 &self.said
             }
             fn is_chained() -> bool {

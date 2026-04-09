@@ -8,7 +8,6 @@ description = "Core traits for content-addressable, verifiable storage using SAI
 
 [features]
 default = []
-surrealdb = ["dep:surrealdb"]
 
 [dependencies]
 # Derive macros
@@ -32,9 +31,6 @@ thiserror = "1"
 
 # Async traits
 async-trait = "0.1"
-
-# SurrealDB for native datetime support (optional)
-surrealdb = { version = "2.4.0", default-features = false, features = ["protocol-ws"], optional = true }
 
 [lints.clippy]
 unwrap_used = "deny"
