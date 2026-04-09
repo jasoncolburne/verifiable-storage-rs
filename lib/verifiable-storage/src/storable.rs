@@ -18,11 +18,11 @@
 /// #[serde(rename_all = "camelCase")]  // for JSON/SAID - DB uses snake_case
 /// pub struct Domain {
 ///     #[said]
-///     pub said: cesr::Digest,
+///     pub said: cesr::Digest256,
 ///     #[prefix]
-///     pub prefix: cesr::Digest,
+///     pub prefix: cesr::Digest256,
 ///     #[previous]
-///     pub previous: Option<cesr::Digest>,
+///     pub previous: Option<cesr::Digest256>,
 ///     #[version]
 ///     pub version: u64,
 ///     pub name: String,
@@ -68,7 +68,7 @@ pub trait Storable: serde::Serialize + serde::de::DeserializeOwned + Clone + Sen
     }
 
     /// Get the primary key value (the SAID).
-    fn id(&self) -> &cesr::Digest;
+    fn id(&self) -> &cesr::Digest256;
 
     /// Check if this type is chained (has prefix + previous).
     fn is_chained() -> bool;

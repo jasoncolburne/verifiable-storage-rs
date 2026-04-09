@@ -171,7 +171,7 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
 /// #[derive(SelfAddressed)]
 /// struct AuditRecord {
 ///     #[said]
-///     pub said: cesr::Digest,
+///     pub said: cesr::Digest256,
 ///     #[created_at]
 ///     pub recorded_at: StorageDatetime,
 ///     pub data: String,
@@ -185,11 +185,11 @@ fn parse_storable_attr(input: &DeriveInput) -> Option<Option<String>> {
 /// #[derive(SelfAddressed)]
 /// struct Domain {
 ///     #[said]
-///     pub said: cesr::Digest,
+///     pub said: cesr::Digest256,
 ///     #[prefix]
-///     pub prefix: cesr::Digest,
+///     pub prefix: cesr::Digest256,
 ///     #[previous]
-///     pub previous: Option<cesr::Digest>,
+///     pub previous: Option<cesr::Digest256>,
 ///     #[version]  // optional
 ///     pub version: u64,
 ///     #[created_at]
@@ -327,7 +327,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     Ok(())
                 }
 
-                fn get_prefix(&self) -> cesr::Digest {
+                fn get_prefix(&self) -> cesr::Digest256 {
                     self.#prefix_field_name.clone()
                 }
 
@@ -359,7 +359,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     #created_at_set
                 }
 
-                fn get_previous(&self) -> Option<cesr::Digest> {
+                fn get_previous(&self) -> Option<cesr::Digest256> {
                     self.#previous_field_name.clone()
                 }
             }
@@ -476,7 +476,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                     #column_count
                 }
 
-                fn id(&self) -> &cesr::Digest {
+                fn id(&self) -> &cesr::Digest256 {
                     &self.#said_field_name
                 }
 
@@ -550,7 +550,7 @@ pub fn derive_self_addressed(input: TokenStream) -> TokenStream {
                 Ok(())
             }
 
-            fn get_said(&self) -> cesr::Digest {
+            fn get_said(&self) -> cesr::Digest256 {
                 self.#said_field_name.clone()
             }
         }

@@ -20,10 +20,3 @@ pub enum StorageError {
     #[error("Not found: {0}")]
     NotFound(String),
 }
-
-#[cfg(feature = "surrealdb")]
-impl From<surrealdb::Error> for StorageError {
-    fn from(e: surrealdb::Error) -> Self {
-        StorageError::StorageError(e.to_string())
-    }
-}

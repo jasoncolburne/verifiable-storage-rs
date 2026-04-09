@@ -1,4 +1,4 @@
-use cesr::{Digest, DigestCode, Matter};
+use cesr::{Digest256, Digest256Code, Matter};
 use serde::Serialize;
 
 use crate::StorageError;
@@ -12,7 +12,7 @@ const SAID_PLACEHOLDER: &str = "############################################";
 pub trait SelfAddressed: Sized {
     fn derive_said(&mut self) -> Result<(), StorageError>;
     fn verify_said(&self) -> Result<(), StorageError>;
-    fn get_said(&self) -> Digest;
+    fn get_said(&self) -> Digest256;
 }
 
 /// Trait for chained types with prefix and previous pointer.
@@ -29,7 +29,7 @@ pub trait SelfAddressed: Sized {
 pub trait Chained: SelfAddressed + Clone {
     fn derive_prefix(&mut self) -> Result<(), StorageError>;
     fn verify_prefix(&self) -> Result<(), StorageError>;
-    fn get_prefix(&self) -> Digest;
+    fn get_prefix(&self) -> Digest256;
 
     fn increment(&mut self) -> Result<(), StorageError>;
 
@@ -38,7 +38,7 @@ pub trait Chained: SelfAddressed + Clone {
     /// only chain metadata updated.
     fn verify_unchanged(&self, proposed: &Self) -> Result<bool, StorageError>;
 
-    fn get_previous(&self) -> Option<Digest>;
+    fn get_previous(&self) -> Option<Digest256>;
     fn set_created_at(&mut self, created_at: crate::StorageDatetime);
     fn get_created_at(&self) -> Option<crate::StorageDatetime>;
 
@@ -65,7 +65,7 @@ pub trait Chained: SelfAddressed + Clone {
 pub fn compute_said_for_fields<T: Serialize>(
     data: &T,
     fields: &[&str],
-) -> Result<Digest, StorageError> {
+) -> Result<Digest256, StorageError> {
     let mut value = serde_json::to_value(data)?;
     let obj = value
         .as_object_mut()
@@ -80,7 +80,7 @@ pub fn compute_said_for_fields<T: Serialize>(
 
     let bytes = serde_json::to_vec(&value)?;
     let hash = blake3::hash(&bytes);
-    Digest::from_raw(DigestCode::Blake3, hash.as_bytes().to_vec())
+    Digest256::from_raw(Digest256Code::Blake3, hash.as_bytes().to_vec())
         .map_err(|e| StorageError::StorageError(e.to_string()))
 }
 
@@ -88,7 +88,7 @@ pub fn compute_said_for_fields<T: Serialize>(
 ///
 /// Blanks the `"said"` field with a placeholder, serializes, and hashes.
 /// Thin wrapper around `compute_said_for_fields`.
-pub fn compute_said<T: Serialize>(data: &T) -> Result<Digest, StorageError> {
+pub fn compute_said<T: Serialize>(data: &T) -> Result<Digest256, StorageError> {
     compute_said_for_fields(data, &["said"])
 }
 
@@ -96,7 +96,7 @@ pub fn compute_said<T: Serialize>(data: &T) -> Result<Digest, StorageError> {
 ///
 /// Blanks the `"said"` field with a placeholder, serializes, and hashes.
 /// Thin wrapper around `compute_said_for_fields`.
-pub fn compute_said_from_value(value: &serde_json::Value) -> Result<Digest, StorageError> {
+pub fn compute_said_from_value(value: &serde_json::Value) -> Result<Digest256, StorageError> {
     compute_said_for_fields(value, &["said"])
 }
 
@@ -124,11 +124,11 @@ impl SelfAddressed for serde_json::Value {
         Ok(())
     }
 
-    fn get_said(&self) -> Digest {
+    fn get_said(&self) -> Digest256 {
         let qb64 = self
             .get("said")
             .and_then(|v| v.as_str())
             .unwrap_or_default();
-        Digest::from_qb64(qb64).unwrap_or_default()
+        Digest256::from_qb64(qb64).unwrap_or_default()
     }
 }
