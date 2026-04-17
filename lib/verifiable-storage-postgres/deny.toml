@@ -9,7 +9,12 @@ no-default-features = false
 feature-depth = 1
 
 [advisories]
-ignore = []
+ignore = [
+    # sqlx 0.8 depends on rand 0.8.5 which has an unsoundness advisory.
+    # The conditions are narrow (custom logger + thread_rng reseeding) and
+    # don't apply to our usage. sqlx 0.9 stable will fix this.
+    "RUSTSEC-2026-0097",
+]
 
 [licenses]
 allow = [
