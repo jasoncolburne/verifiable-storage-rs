@@ -248,6 +248,10 @@ fn bind_value(args: &mut PgArguments, value: &Value) -> Result<(), StorageError>
             args.add(v.as_slice())
                 .map_err(|e| StorageError::StorageError(e.to_string()))?;
         }
+        Value::Ints(v) => {
+            args.add(v.as_slice())
+                .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        }
         Value::Datetime(dt) => {
             // Convert via string to avoid depending on StorageDatetime's internal structure
             let s = dt.to_string();
@@ -617,6 +621,27 @@ impl TransactionExecutor for PgTransaction {
         table: &str,
     ) -> Result<u64, StorageError> {
         crate::bind_insert_with_table_tx(&mut self.tx, item, table).await
+    }
+
+    async fn fetch_column_i64(&mut self, query: ColumnQuery) -> Result<Vec<i64>, StorageError> {
+        use sqlx::Row;
+
+        let sql = build_column_query_sql(&query);
+
+        let mut args = PgArguments::default();
+        bind_filters(&mut args, &query.filters)?;
+
+        let rows = sqlx::query_with(&sql, args)
+            .fetch_all(&mut *self.tx)
+            .await
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+
+        let values: Vec<i64> = rows
+            .iter()
+            .map(|row| row.try_get(0))
+            .collect::<Result<_, _>>()
+            .map_err(|e| StorageError::StorageError(e.to_string()))?;
+        Ok(values)
     }
 
     async fn fetch_grouped_count(&mut self, query: ColumnQuery) -> Result<Vec<i64>, StorageError> {

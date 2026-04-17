@@ -17,6 +17,7 @@ pub enum Value {
     Float(f64),
     Bool(bool),
     Strings(Vec<String>),
+    Ints(Vec<i64>),
     Datetime(StorageDatetime),
     Null,
 }
@@ -66,6 +67,12 @@ impl From<bool> for Value {
 impl From<Vec<String>> for Value {
     fn from(v: Vec<String>) -> Self {
         Value::Strings(v)
+    }
+}
+
+impl From<Vec<i64>> for Value {
+    fn from(v: Vec<i64>) -> Self {
+        Value::Ints(v)
     }
 }
 
@@ -649,6 +656,9 @@ pub trait TransactionExecutor: Send + Sync {
         item: &T,
         table: &str,
     ) -> Result<u64, StorageError>;
+
+    /// Fetch integer column values using a ColumnQuery within the transaction.
+    async fn fetch_column_i64(&mut self, query: ColumnQuery) -> Result<Vec<i64>, StorageError>;
 
     /// Execute a grouped COUNT query within the transaction.
     ///
